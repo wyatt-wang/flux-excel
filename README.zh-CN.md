@@ -1,36 +1,36 @@
 # flux-excel
 
-[中文文档](README.zh-CN.md)
+[English](README.md)
 
-flux-excel is a Java Excel import and export toolkit built on Apache POI. It is designed to cover common Excel workflows with a small set of annotations and fluent APIs, including standard import/export, template filling, large data export, batch zip export, event-based reading, field formatting, comments, dropdown validation, image reading/writing, and related scenarios.
+flux-excel 是一个基于 Apache POI 的 Java Excel 导入导出工具库，目标是用少量注解和链式 API 完成常见 Excel 场景：普通导入导出、模板填充、大数据导出、批量导出压缩、事件模式读取、字段格式化、批注、下拉校验、图片读写等。
 
-The project contains two modules:
+项目包含两个模块：
 
-- `flux-excel-core`: core import and export features.
-- `flux-excel-spring-boot-starter`: Spring Boot auto-configuration, including template directory resource resolution. Model and template metadata are loaded lazily by default from the entry point that uses them.
+- `flux-excel-core`：核心导入导出能力。
+- `flux-excel-spring-boot-starter`：Spring Boot 自动配置，支持模板目录资源定位，模型和模板默认按使用入口懒加载。
 
 ## Features
 
-- Fluent entry points: `Excel.write(...)`, `Excel.read(...)`, `Excel.largeWrite(...)`, `Excel.batchWrite(...)`, and `Excel.eventRead(...)`.
-- Annotation-driven models: use `@ExcelWrite`, `@ExcelWriteProperty`, `@ExcelRead`, and `@ExcelReadProperty` to define headers, column width, formatting, styles, validation, and more.
-- Import/export formatting for `java.util.Date`, `Calendar`, and common `java.time` types.
-- Supports regular objects, lists, and dynamic `List<Map<String, Object>>` tables.
-- Supports regular Workbook reading and event-based reading.
-- Supports `.xls`, `.xlsx`, and `.csv`.
-- Supports template export and template validation.
-- Supports text watermarks and custom headers for empty exports.
-- Supports large list export, sheet splitting, multi-threaded export, and batch zip export.
-- Supports Spring Boot auto-configuration.
+- 链式调用入口：`Excel.write(...)`、`Excel.read(...)`、`Excel.largeWrite(...)`、`Excel.batchWrite(...)`、`Excel.eventRead(...)`。
+- 注解驱动模型：通过 `@ExcelWrite`、`@ExcelWriteProperty`、`@ExcelRead`、`@ExcelReadProperty` 定义表头、列宽、格式化、样式、校验等。
+- 支持 `java.util.Date`、`Calendar` 和常用 `java.time` 类型的导入导出格式化。
+- 支持普通对象、列表和 `List<Map<String, Object>>` 动态表导入导出。
+- 支持普通 Workbook 读取和事件模式读取。
+- 支持 `.xls`、`.xlsx` 和 `.csv`。
+- 支持模板导出和模板校验。
+- 支持导出文字水印、空数据自定义表头。
+- 支持大数据列表导出、分 sheet 导出、多线程导出和批量导出压缩。
+- 支持 Spring Boot 自动装配。
 
 ## Requirements
 
 - JDK 21+
 - Maven 3.8+
-- Spring Boot 3.x, only when using `flux-excel-spring-boot-starter`
+- Spring Boot 3.x，只有使用 `flux-excel-spring-boot-starter` 时需要
 
 ## Installation
 
-If the dependency has been published to a Maven repository, add it directly:
+如果依赖已发布到 Maven 仓库，可直接引入：
 
 ```xml
 <dependency>
@@ -40,7 +40,7 @@ If the dependency has been published to a Maven repository, add it directly:
 </dependency>
 ```
 
-For Spring Boot projects, the starter is recommended:
+Spring Boot 项目推荐使用 starter：
 
 ```xml
 <dependency>
@@ -50,19 +50,19 @@ For Spring Boot projects, the starter is recommended:
 </dependency>
 ```
 
-If the artifacts have not been published yet, install them locally from source first:
+如果还没有发布到 Maven 仓库，可以先从源码安装到本地：
 
 ```bash
 mvn clean install
 ```
 
-Then reference the coordinates above from your application.
+然后在业务项目中按上面的坐标引用。
 
 ## Quick Start
 
-### 1. Define an export/import model
+### 1. 定义导出和导入模型
 
-Models should extend `ExcelBaseModel`.
+模型需要继承 `ExcelBaseModel`。
 
 ```java
 import com.github.excel.annotation.ExcelRead;
@@ -100,24 +100,24 @@ public class UserExcelDTO extends ExcelBaseModel {
 
 ## Fluent API Overview
 
-Common entry points are available from `com.github.excel.Excel`:
+常用入口都在 `com.github.excel.Excel`：
 
-| Entry | Description |
+| 入口 | 说明 |
 | --- | --- |
-| `Excel.write(OutputStream)` | Export to an output stream |
-| `Excel.write(File)` | Export to a file |
-| `Excel.write(HttpServletRequest, HttpServletResponse)` | Export to an HTTP response |
-| `Excel.read(InputStream)` | Read from an input stream |
-| `Excel.read(File)` | Read from a file |
-| `Excel.largeWrite(OutputStream)` | SXSSF large data export to an output stream |
-| `Excel.largeWrite(File)` | SXSSF large data export to a file |
-| `Excel.batchWrite(String outputDirPath)` | Batch export multiple files and compress them |
-| `Excel.eventRead(InputStream)` | Event-based reading from an input stream |
-| `Excel.eventRead(File)` | Event-based reading from a file |
+| `Excel.write(OutputStream)` | 导出到输出流 |
+| `Excel.write(File)` | 导出到文件 |
+| `Excel.write(HttpServletRequest, HttpServletResponse)` | 导出到 HTTP 响应 |
+| `Excel.read(InputStream)` | 从输入流读取 |
+| `Excel.read(File)` | 从文件读取 |
+| `Excel.largeWrite(OutputStream)` | SXSSF 大数据导出到输出流 |
+| `Excel.largeWrite(File)` | SXSSF 大数据导出到文件 |
+| `Excel.batchWrite(String outputDirPath)` | 多文件批量导出并压缩 |
+| `Excel.eventRead(InputStream)` | 事件模式读取输入流 |
+| `Excel.eventRead(File)` | 事件模式读取文件 |
 
-Standard export supports `.xlsx`, `.xls`, and `.csv`. Large data export is based on `SXSSFWorkbook` and only generates `.xlsx`. Event-based reading is suitable for large imports because it does not create a full `Workbook`.
+普通导出支持 `.xlsx`、`.xls`、`.csv`。大数据导出基于 `SXSSFWorkbook`，只生成 `.xlsx`。事件模式读取适合大文件导入，不会创建完整 `Workbook`。
 
-### 2. Export Excel
+### 2. 导出 Excel
 
 ```java
 import com.github.excel.Excel;
@@ -139,7 +139,7 @@ try (OutputStream outputStream = new FileOutputStream("users.xlsx")) {
 }
 ```
 
-### 3. Read Excel
+### 3. 读取 Excel
 
 ```java
 import com.github.excel.Excel;
@@ -160,7 +160,7 @@ try (InputStream inputStream = new FileInputStream("users.xlsx")) {
 
 ## Export Usage
 
-### Export a single object
+### 导出单个对象
 
 ```java
 UserExcelDTO user = queryUser();
@@ -173,9 +173,9 @@ Excel.write(new File("user.xlsx"))
         .export();
 ```
 
-### Specify the start position
+### 指定起始位置
 
-`at(rowIndex, colIndex)` uses zero-based row and column indexes.
+`at(rowIndex, colIndex)` 使用从 `0` 开始的行列下标。
 
 ```java
 Excel.write(outputStream)
@@ -187,9 +187,9 @@ Excel.write(outputStream)
         .export();
 ```
 
-### Exclude fields
+### 排除字段
 
-`exclude(...)` applies to the most recent data model added by `model(...)` or `list(...)`.
+`exclude(...)` 作用于最近一次 `model(...)` 或 `list(...)` 添加的数据模型。
 
 ```java
 Excel.write(outputStream)
@@ -201,7 +201,7 @@ Excel.write(outputStream)
         .export();
 ```
 
-You can also pass excluded fields directly when adding a list. This is supported by large data export as well:
+也可以在添加列表时直接传入排除字段，适用于大数据导出：
 
 ```java
 Excel.largeWrite(outputStream)
@@ -210,9 +210,9 @@ Excel.largeWrite(outputStream)
         .export();
 ```
 
-### Export with a template
+### 使用模板导出
 
-Template files should be placed in the configured template directory. Plain Java projects can load templates manually. Spring Boot projects can use auto-configuration, as shown later.
+模板文件需要提前放到模板目录中。普通 Java 项目可以手动加载模板；Spring Boot 项目可通过配置自动加载，见下文。
 
 ```java
 Excel.write(outputStream)
@@ -225,7 +225,7 @@ Excel.write(outputStream)
         .export();
 ```
 
-You can also use a template from disk:
+也可以直接使用磁盘模板：
 
 ```java
 Excel.write(outputStream)
@@ -238,9 +238,9 @@ Excel.write(outputStream)
         .export();
 ```
 
-### Custom write processing
+### 自定义写入
 
-Use `custom(...)` to access the underlying POI `Workbook` for additional processing.
+可以通过 `custom(...)` 获取底层 POI `Workbook` 做补充处理。
 
 ```java
 Excel.write(outputStream)
@@ -257,9 +257,9 @@ Excel.write(outputStream)
         .export();
 ```
 
-### Write cells and merged cells
+### 写入单元格和合并单元格
 
-`column(...)` writes a single cell. `mergeColumn(...)` merges a region and writes a value. Row and column indexes are zero-based.
+`column(...)` 用于写入单个单元格，`mergeColumn(...)` 用于合并区域并写入值。行列下标均从 `0` 开始。
 
 ```java
 ExcelWriterCellParam title = new ExcelWriterCellParam()
@@ -284,9 +284,9 @@ Excel.write(outputStream)
         .export();
 ```
 
-### Comments and data validation
+### 批注和数据校验
 
-`comment(...)` and `validation(...)` apply to fields in the current export model by field name.
+`comment(...)`、`validation(...)` 按字段名作用于当前导出的模型字段。
 
 ```java
 ExcelWriterCommentParam comment = new ExcelWriterCommentParam()
@@ -313,9 +313,9 @@ Excel.write(outputStream)
         .export();
 ```
 
-### Styles
+### 样式
 
-Register a custom style class with `style(...)`, then reference the style name from annotations.
+通过 `style(...)` 注册自定义样式类，然后在注解中使用样式名。
 
 ```java
 Excel.write(outputStream)
@@ -327,9 +327,9 @@ Excel.write(outputStream)
         .export();
 ```
 
-### Dynamic Map/CSV and empty headers
+### 动态 Map/CSV 和空表头
 
-`listMap(...)` is suitable for dynamic tables whose fields are not fixed until runtime. Enable CSV output with `suffix(ExcelSuffixEnum.CSV)`.
+`listMap(...)` 适合运行时字段不固定的动态表。CSV 通过 `suffix(ExcelSuffixEnum.CSV)` 开启。
 
 ```java
 List<Map<String, Object>> rows = queryDynamicRows();
@@ -341,7 +341,7 @@ Excel.write(outputStream)
         .export();
 ```
 
-When exporting empty data, you can pass Map headers directly or pass a model class annotated with `@ExcelWriteProperty`.
+空数据导出时可直接传 Map 表头，也可传已标注 `@ExcelWriteProperty` 的模型类。
 
 ```java
 Map<String, String> headers = new LinkedHashMap<>();
@@ -357,9 +357,9 @@ Excel.write(outputStream)
         .export();
 ```
 
-### Text watermark
+### 文字水印
 
-`watermark(...)` adds a text background watermark to `.xlsx` export files.
+`watermark(...)` 会在 `.xlsx` 导出文件中添加文字背景水印。
 
 ```java
 Excel.write(outputStream)
@@ -370,9 +370,9 @@ Excel.write(outputStream)
         .export();
 ```
 
-### SXSSF streaming export configuration
+### SXSSF 流式导出配置
 
-For regular `.xlsx` export, call `streaming(true)` to enable `SXSSFWorkbook`. Large data export uses SXSSF by default and supports the same row-window and temporary-file options.
+普通 `.xlsx` 导出可通过 `streaming(true)` 启用 `SXSSFWorkbook`。大数据导出默认就是 SXSSF，也支持相同的窗口和临时文件配置。
 
 ```java
 Excel.write(outputStream)
@@ -387,16 +387,16 @@ Excel.write(outputStream)
         .export();
 ```
 
-Configuration:
+配置说明：
 
-| Method | Description |
+| 方法 | 说明 |
 | --- | --- |
-| `streaming(true)` | Enable SXSSF for regular `.xlsx` export. `.xls` does not support SXSSF |
-| `rowAccessWindowSize(int)` | Row window retained in memory by SXSSF. Default is `10000`; `-1` means rows are not flushed automatically |
-| `compressTempFiles(boolean)` | Whether to compress SXSSF temporary files. This reduces disk usage but increases CPU cost |
-| `useSharedStringsTable(boolean)` | Whether to use a shared strings table. It improves compatibility but may increase memory usage |
+| `streaming(true)` | 普通 `.xlsx` 导出启用 SXSSF；`.xls` 不支持 SXSSF |
+| `rowAccessWindowSize(int)` | SXSSF 内存中保留的行窗口，默认 `10000`，`-1` 表示不自动刷出 |
+| `compressTempFiles(boolean)` | 是否压缩 SXSSF 临时文件，降低磁盘占用但会增加 CPU 开销 |
+| `useSharedStringsTable(boolean)` | 是否使用共享字符串表，兼容性更好但可能增加内存占用 |
 
-### Export to an HTTP response
+### 导出到 HTTP 响应
 
 ```java
 @GetMapping("/users/export")
@@ -414,7 +414,7 @@ public void exportUsers(HttpServletRequest request, HttpServletResponse response
 
 ## Import Usage
 
-### Import entry point and parameters
+### 导入入口和参数
 
 ```java
 Excel.read(new File("users.xlsx"))
@@ -427,20 +427,20 @@ Excel.read(new File("users.xlsx"))
         .parse();
 ```
 
-Common methods:
+常用方法：
 
-| Method | Description |
+| 方法 | 说明 |
 | --- | --- |
-| `fileName(String)` | Specify the file name, mainly for detecting suffixes such as `.csv` |
-| `template(String)` | Specify an import template name, used with `@ExcelRead(checkTitle = true)` for title validation |
-| `password(String)` | Read an encrypted Excel file |
-| `closeInputStream(boolean)` | Whether the framework should close the `InputStream` after reading |
-| `readPicture(boolean)` | Whether to parse images |
-| `readOnly(boolean)` | File read mode |
-| `failFast(boolean)` | Whether validation should fail fast |
-| `sheet(int)` | Select a sheet by zero-based index |
+| `fileName(String)` | 指定文件名，主要用于判断 `.csv` 等后缀 |
+| `template(String)` | 指定导入模板名，配合 `@ExcelRead(checkTitle = true)` 校验 |
+| `password(String)` | 读取加密 Excel |
+| `closeInputStream(boolean)` | `InputStream` 读取完成后是否由框架关闭 |
+| `readPicture(boolean)` | 是否解析图片 |
+| `readOnly(boolean)` | 文件读取模式 |
+| `failFast(boolean)` | 校验失败时是否快速失败 |
+| `sheet(int)` | 选择 sheet，下标从 `0` 开始 |
 
-### Read a single object
+### 读取单个对象
 
 ```java
 UserExcelDTO user = Excel.read(new File("user.xlsx"))
@@ -450,7 +450,7 @@ UserExcelDTO user = Excel.read(new File("user.xlsx"))
         .getModel(UserExcelDTO.class);
 ```
 
-### Read a list and close the input stream
+### 读取列表并关闭输入流
 
 ```java
 List<UserExcelDTO> users = Excel.read(inputStream)
@@ -462,9 +462,9 @@ List<UserExcelDTO> users = Excel.read(inputStream)
         .getList(UserExcelDTO.class);
 ```
 
-### Read multiple models or multiple sheets
+### 同时读取多个模型或多个 Sheet
 
-Call `sheet(...)`, `model(...)`, and `list(...)` repeatedly to register multiple read tasks.
+可以连续调用 `sheet(...)`、`model(...)`、`list(...)` 注册多个读取任务。
 
 ```java
 ExcelReadBuilder builder = Excel.read(inputStream)
@@ -479,22 +479,22 @@ ReportTitleDTO title = builder.getModel(ReportTitleDTO.class);
 List<UserExcelDTO> users = builder.getList(UserExcelDTO.class);
 ```
 
-### Row callback
+### 行级回调
 
 ```java
 Excel.read(inputStream)
         .fileName("users.xlsx")
         .sheet(0)
         .list(UserExcelDTO.class, user -> {
-            // Called after each row is parsed.
+            // 每解析完成一行都会回调
             System.out.println(user.getName());
         })
         .parse();
 ```
 
-### Batch callback
+### 批处理回调
 
-This is useful when importing a large amount of data and persisting it in batches.
+适合导入数据量较大时分批落库。
 
 ```java
 Excel.read(inputStream)
@@ -514,9 +514,9 @@ Excel.read(inputStream)
         .parse();
 ```
 
-### Read images
+### 读取图片
 
-After enabling `readPicture(true)`, model fields can receive cell images as `ExcelReaderPictureModel`, `List<ExcelReaderPictureModel>`, or `byte[]`.
+开启 `readPicture(true)` 后，模型字段可以使用 `ExcelReaderPictureModel`、`List<ExcelReaderPictureModel>` 或 `byte[]` 接收单元格图片。
 
 ```java
 @ExcelRead
@@ -534,7 +534,7 @@ List<UserImportDTO> users = Excel.read(inputStream)
         .getList(UserImportDTO.class);
 ```
 
-### Custom read processing
+### 自定义读取
 
 ```java
 Excel.read(inputStream)
@@ -548,9 +548,9 @@ Excel.read(inputStream)
         .parse();
 ```
 
-### Read Map/CSV
+### 读取 Map/CSV
 
-`mapList()` treats the first row as the header and converts the remaining rows to `List<Map<String, Object>>`.
+`mapList()` 会把第一行作为表头，后续行转换为 `List<Map<String, Object>>`。
 
 ```java
 List<Map<String, Object>> rows = Excel.read(inputStream)
@@ -558,7 +558,7 @@ List<Map<String, Object>> rows = Excel.read(inputStream)
         .mapList();
 ```
 
-CSV can also be read into a model:
+CSV 也可以按模型读取：
 
 ```java
 List<UserExcelDTO> users = Excel.read(inputStream)
@@ -570,7 +570,7 @@ List<UserExcelDTO> users = Excel.read(inputStream)
 
 ## Large Data Export
 
-Large data export uses `Excel.largeWrite(...)`. This mode reuses the internal large data writer and is suitable for million-row lists or scenarios that need to split sheets by a maximum row count.
+大数据导出使用 `Excel.largeWrite(...)`。该模式会复用内部大数据写入器，适合百万级列表或需要按最大行数拆分 sheet 的场景。
 
 ```java
 try (OutputStream outputStream = new FileOutputStream("large-users.xlsx")) {
@@ -586,7 +586,7 @@ try (OutputStream outputStream = new FileOutputStream("large-users.xlsx")) {
 }
 ```
 
-The same large data export file can append multiple lists. Each `list(...)` call can specify a model and excluded fields.
+同一个大数据导出文件可以追加多个列表；每次 `list(...)` 可指定模型和排除字段。
 
 ```java
 Excel.largeWrite(outputStream)
@@ -600,7 +600,7 @@ Excel.largeWrite(outputStream)
 
 ## Batch Export Zip
 
-Batch export concurrently generates multiple Excel files and finally compresses them into a zip. `ExcelBatchWriteBuilder(String outputDirPath, int maxPoolSize)` can be used to specify the maximum thread count.
+批量导出会并发生成多个 Excel 文件，并最终压缩为 zip。`ExcelBatchWriteBuilder(String outputDirPath, int maxPoolSize)` 可指定最大线程数。
 
 ```java
 Excel.batchWrite("/tmp/flux-excel")
@@ -614,7 +614,7 @@ Excel.batchWrite("/tmp/flux-excel")
         .exportZip("users");
 ```
 
-Export a zip to an HTTP response:
+导出 zip 到 HTTP 响应：
 
 ```java
 new ExcelBatchWriteBuilder("/tmp/flux-excel", 4)
@@ -626,13 +626,13 @@ new ExcelBatchWriteBuilder("/tmp/flux-excel", 4)
 
 ## Event Read
 
-Event-based reading is suitable for parsing very large files. Provide a row reader and a batch handler when using it.
+事件模式读取适合超大文件解析，使用时需要提供行解析器和批处理器。
 
 ```java
 Excel.eventRead(inputStream)
         .fileName("large-users.xlsx")
         .rowReader((sheetIndex, curRow, rowValue) -> {
-            // Convert the raw row to a business object.
+            // 将原始行解析为业务对象
             return convertRow(sheetIndex, curRow, rowValue);
         })
         .batchHandler(new AbstractEventBatchHandler<UserExcelDTO>(1000) {
@@ -644,11 +644,11 @@ Excel.eventRead(inputStream)
         .parse();
 ```
 
-`rowReader` receives a zero-based `sheetIndex`, the original Excel row number as `curRow`, and the current row as a list of strings in `rowValue`. Event-based reading is suitable for large imports, but it does not execute the model annotation mapping, image reading, or template validation used by regular `Excel.read(...)`.
+`rowReader` 接收到的 `sheetIndex` 从 `0` 开始，`curRow` 是 Excel 原始行号，`rowValue` 是当前行的字符串列表。事件模式适合大文件导入，但不会执行普通 `Excel.read(...)` 的模型注解映射、图片读取和模板校验。
 
 ## Compatible Writer API
 
-Prefer the fluent API for new code. When compatibility with legacy calls is required, use `Excel.write(...).writer()` to access the underlying `ExcelWriter`.
+推荐优先使用链式 API。需要兼容历史调用时，可以通过 `Excel.write(...).writer()` 获取底层 `ExcelWriter`。
 
 ```java
 ExcelWriter writer = Excel.write(outputStream)
@@ -661,30 +661,30 @@ writer.setStreaming(true)
         .process(outputStream, "users.xlsx", ExcelSuffixEnum.XLSX);
 ```
 
-Common compatible methods:
+常用兼容方法：
 
-| Method | Description |
+| 方法 | 说明 |
 | --- | --- |
-| `addModel(...)` | Add a single model |
-| `addModelList(...)` | Add a model list |
-| `addCustomColumn(...)` | Add a custom cell |
-| `addMergeCustomColumn(...)` | Add a merged cell |
-| `addValidationOrComment(...)` | Add a comment, numeric range validation, or dropdown validation |
-| `setStreaming(boolean)` | Set whether regular `.xlsx` export uses SXSSF |
-| `selectSheet(String)` | Set the sheet selected when the file is opened |
-| `process(...)` / `export(...)` | Write to a stream, file, or response |
+| `addModel(...)` | 添加单个模型 |
+| `addModelList(...)` | 添加模型列表 |
+| `addCustomColumn(...)` | 添加自定义单元格 |
+| `addMergeCustomColumn(...)` | 添加合并单元格 |
+| `addValidationOrComment(...)` | 添加批注、数字范围或下拉校验 |
+| `setStreaming(boolean)` | 设置普通 `.xlsx` 是否使用 SXSSF |
+| `selectSheet(String)` | 设置打开文件时选中的 sheet |
+| `process(...)` / `export(...)` | 输出到流、文件或响应 |
 
 ## Spring Boot Starter
 
-After adding the starter, application startup automatically:
+引入 starter 后，应用启动时会自动：
 
-- Registers resource resolution for export and import template directories.
-- Registers the optional import template exclusion hook.
-- Registers the default `ExcelLargeListWriter` bean.
+- 注册导出、导入模板目录的资源定位能力。
+- 注册可选的导入模板排除器。
+- 注册默认 `ExcelLargeListWriter` Bean。
 
-DTO metadata and template contents are not scanned or parsed at startup. They are loaded lazily and cached when a corresponding `Class` or template name is first used by import/export.
+DTO 元数据和模板内容不会在启动时扫描或解析，而是在导入、导出第一次使用对应 `Class` 或模板名时懒加载并缓存。
 
-Configuration example:
+配置示例：
 
 ```yaml
 excel:
@@ -692,7 +692,7 @@ excel:
   import-template-dir: import-excel-template
 ```
 
-Resource directory example:
+资源目录示例：
 
 ```text
 src/main/resources/
@@ -706,61 +706,61 @@ src/main/resources/
 
 ### `@ExcelWrite`
 
-Marks a model class as exportable. Common attributes:
+用于标记可导出的模型类。常用属性：
 
-| Attribute | Description |
+| 属性 | 说明 |
 | --- | --- |
-| `fillTitle` | Whether to fill headers automatically |
-| `freezeTitle` | Whether to freeze the header row |
-| `rowIndex` / `colIndex` | Default start row and column |
-| `fillStyle` | Fill direction |
-| `titleStyleName` / `contentStyleName` | Header and content style names |
-| `fillType` | List fill mode |
-| `themeName` / `customThemeName` | Theme configuration |
-| `incrementSequenceNo` | Whether to fill incremental sequence numbers |
-| `filterTitle` | Whether to enable header filtering |
+| `fillTitle` | 是否自动填充表头 |
+| `freezeTitle` | 是否冻结标题 |
+| `rowIndex` / `colIndex` | 默认起始行列 |
+| `fillStyle` | 填充方向 |
+| `titleStyleName` / `contentStyleName` | 标题和内容样式名 |
+| `fillType` | 列表填充方式 |
+| `themeName` / `customThemeName` | 主题配置 |
+| `incrementSequenceNo` | 是否填充自增序号 |
+| `filterTitle` | 是否开启表头筛选 |
 
 ### `@ExcelWriteProperty`
 
-Marks an export field. Common attributes:
+用于标记导出字段。常用属性：
 
-| Attribute | Description |
+| 属性 | 说明 |
 | --- | --- |
-| `titleName` | Header name |
-| `rowHeight` / `colWidth` | Row height and column width |
-| `rowIndex` / `colIndex` | Fixed row and column for the field |
-| `formatPattern` | Output format |
-| `formatter` | Custom export formatter |
-| `commentText` | Comment content |
-| `dropDownOptions` | Dropdown options |
-| `disable` | Whether to disable this field |
-| `index` | Sort order |
+| `titleName` | 表头名称 |
+| `rowHeight` / `colWidth` | 行高和列宽 |
+| `rowIndex` / `colIndex` | 字段固定行列 |
+| `formatPattern` | 输出格式 |
+| `formatter` | 自定义导出格式化器 |
+| `commentText` | 批注内容 |
+| `dropDownOptions` | 下拉选项 |
+| `disable` | 是否禁用该字段 |
+| `index` | 排序号 |
 
 ### `@ExcelRead`
 
-Marks a model class as importable. Common attributes:
+用于标记可导入的模型类。常用属性：
 
-| Attribute | Description |
+| 属性 | 说明 |
 | --- | --- |
-| `checkTitle` | Whether to validate headers |
-| `enableSeparator` | Whether to enable separator parsing |
+| `checkTitle` | 是否校验表头 |
+| `enableSeparator` | 是否启用分隔符解析 |
 
 ### `@ExcelReadProperty`
 
-Marks an import field. Common attributes:
+用于标记导入字段。常用属性：
 
-| Attribute | Description |
+| 属性 | 说明 |
 | --- | --- |
-| `titleName` | Matching header name |
-| `separator` | Separator |
-| `formatPattern` | Read format |
-| `formatter` | Custom read formatter |
-| `checkNull` | Whether to validate non-null values |
-| `disable` | Whether to disable this field |
+| `titleName` | 对应表头名称 |
+| `separator` | 分隔符 |
+| `formatPattern` | 读取格式 |
+| `formatter` | 自定义读取格式化器 |
+| `checkNull` | 是否校验空值 |
+| `disable` | 是否禁用该字段 |
 
 ## Custom Formatters
 
-### Export formatter
+### 导出格式化器
 
 ```java
 public class MoneyWriterFormat implements ExcelWriterDataFormat {
@@ -779,7 +779,7 @@ public class MoneyWriterFormat implements ExcelWriterDataFormat {
 private BigDecimal amount;
 ```
 
-### Import formatter
+### 导入格式化器
 
 ```java
 public class MoneyReaderFormat implements ExcelReaderDataFormat {
@@ -800,40 +800,40 @@ private BigDecimal amount;
 
 ## Template Loading Without Spring Boot
 
-Non-Spring Boot projects also lazily load model metadata by the provided model `Class`. Templates can be loaded lazily by template name after configuring directories with `ExcelMetadataRegistry`, or you can continue to proactively warm them through the legacy API:
+非 Spring Boot 项目默认也会按传入的模型 `Class` 懒加载元数据。模板可以通过 `ExcelMetadataRegistry` 配置目录后按模板名懒加载，也可以继续使用旧 API 主动预热：
 
 ```java
 ExcelMetadataRegistry.configureTemplateDirectory("/path/to/export/templates", "/path/to/import/templates", null);
 
-// Optional warm-up, not required.
+// 可选预热，非必须
 ExcelMetadataRegistry.loadExcelTemplate("/path/to/export/templates");
 ExcelMetadataRegistry.loadImportExcelTemplate("/path/to/import/templates", null);
 ```
 
-To explicitly reload metadata, clear the cache. The next import/export will parse it again:
+如需显式热加载，可清理缓存，下一次导入导出会重新解析：
 
 ```java
 ExcelMetadataRegistry.clearModel(UserExcelDTO.class);
 ExcelMetadataRegistry.clearTemplate("user-template.xlsx");
 ```
 
-`ExcelBootLoader` is still retained as a compatibility facade. Legacy calls are delegated to `ExcelMetadataRegistry`.
+`ExcelBootLoader` 仍作为兼容门面保留，历史调用会委托到 `ExcelMetadataRegistry`。
 
 ## Build And Test
 
-Compile:
+编译：
 
 ```bash
 mvn -pl flux-excel-core -am compile
 ```
 
-Run tests:
+运行测试：
 
 ```bash
 mvn -pl flux-excel-core test
 ```
 
-Full build:
+完整构建：
 
 ```bash
 mvn clean install
@@ -843,8 +843,8 @@ mvn clean install
 
 ```text
 flux-excel/
-  flux-excel-core/                 # Core import/export features
-  flux-excel-spring-boot-starter/  # Spring Boot auto-configuration
+  flux-excel-core/                 # 核心导入导出能力
+  flux-excel-spring-boot-starter/  # Spring Boot 自动配置
   pom.xml
   README.md
   README.zh-CN.md
@@ -853,24 +853,24 @@ flux-excel/
 
 ## Roadmap
 
-- Continue splitting `BaseExcelWriter` to reduce the complexity of the core write logic.
-- Improve unit tests and large data export performance tests.
-- Add more Spring Boot sample projects.
+- 继续拆分 `BaseExcelWriter`，降低核心写入逻辑复杂度。
+- 完善单元测试和大数据导出性能测试。
+- 补充更多 Spring Boot 示例项目。
 
 ## Contributing
 
-Issues and pull requests are welcome. Before submitting changes, run:
+欢迎提交 Issue 和 Pull Request。建议在提交前执行：
 
 ```bash
 mvn clean test
 ```
 
-When submitting a PR, please describe:
+提交 PR 时请说明：
 
-- The purpose and usage scenario of the change.
-- Whether it has compatibility impact.
-- Whether tests were added or updated.
+- 改动目的和使用场景。
+- 是否包含兼容性影响。
+- 是否新增或更新测试。
 
 ## License
 
-flux-excel is open-sourced under the [Apache License 2.0](LICENSE).
+flux-excel 使用 [Apache License 2.0](LICENSE) 开源协议。
