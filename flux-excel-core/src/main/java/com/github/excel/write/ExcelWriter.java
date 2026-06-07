@@ -14,8 +14,6 @@ import com.github.excel.write.style.AbstractExcelStyle;
 import org.apache.poi.ss.usermodel.CellStyle;
 import org.apache.poi.ss.usermodel.Font;
 
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
 import java.io.File;
 import java.io.OutputStream;
 import java.util.List;
@@ -92,19 +90,9 @@ public interface ExcelWriter {
 	ExcelWriter export(OutputStream outputStream, String fileName, ExcelSuffixEnum suffixEnum);
 
 	/**
-	 * 导出到响应
-	 */
-	ExcelWriter export(HttpServletRequest request, HttpServletResponse response, String fileName, ExcelSuffixEnum suffixEnum);
-
-	/**
 	 * 向后兼容旧 API
 	 */
 	ExcelWriter process(OutputStream outputStream, String fileName, ExcelSuffixEnum suffixEnum);
-
-	/**
-	 * 向后兼容旧 API
-	 */
-	ExcelWriter process(HttpServletRequest request, HttpServletResponse response, String fileName, ExcelSuffixEnum suffixEnum);
 
 	/**
 	 * 向后兼容旧 API

@@ -16,6 +16,11 @@ The project contains two modules:
 - Import/export formatting for `java.util.Date`, `Calendar`, and common `java.time` types.
 - Supports regular objects, lists, and dynamic `List<Map<String, Object>>` tables.
 - Supports regular Workbook reading and event-based reading.
+- Supports reading headers.
+- Supports reading comments.
+- Supports reading hyperlinks.
+- Supports reading merged cells.
+- Supports dynamic headers and table data.
 - Supports `.xls`, `.xlsx`, and `.csv`.
 - Supports template export and template validation.
 - Supports text watermarks and custom headers for empty exports.

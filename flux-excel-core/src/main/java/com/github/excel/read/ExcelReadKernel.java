@@ -1,9 +1,7 @@
 package com.github.excel.read;
 
-import com.github.excel.boot.ExcelBootLoader;
-import com.github.excel.constant.ExcelConstant;
 import com.github.excel.context.ExcelReaderModelContext;
-import com.github.excel.exception.ExcelReaderException;
+import com.github.excel.engine.ExcelRuntimeOptions;
 import com.github.excel.helper.ExcelValidationHelper;
 import com.github.excel.helper.WorkbookHelper;
 import com.github.excel.model.ExcelBaseModel;
@@ -12,45 +10,44 @@ import com.github.excel.param.ExcelReaderListParam;
 import com.github.excel.read.pipeline.ExcelReadContext;
 import com.github.excel.read.executor.ExcelReaderPictureExecutor;
 import com.github.excel.read.executor.ExcelReaderTemplateValidator;
-import com.github.excel.read.executor.impl.ExcelReaderPictureStanderExecutor;
-import com.github.excel.read.executor.impl.ExcelReaderTemplateStanderValidator;
 import com.github.excel.read.format.ExcelReaderFormatManager;
 import com.github.excel.read.handler.row.ExcelReaderRowParser;
-import com.github.excel.read.handler.row.ExcelReaderRowParserImpl;
 import com.github.excel.read.format.ExcelReaderDataFormat;
-import com.github.excel.read.format.ExcelDefaultReaderDataFormat;
 import com.github.excel.util.IOUtils;
 import com.github.excel.util.StringUtil;
 import com.github.excel.param.ExcelReaderStreamParam;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellType;
+import org.apache.poi.ss.usermodel.DataFormatter;
 import org.apache.poi.ss.usermodel.FormulaEvaluator;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.text.ParseException;
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
-import java.util.ServiceLoader;
 import java.util.stream.Collectors;
 
 public class ExcelReadKernel<T extends ExcelBaseModel> {
 
-	private final ExcelReaderFormatManager readerFormatManager = new ExcelReaderFormatManager();
-	private final ExcelReaderTemplateValidator templateValidator = new ExcelReaderTemplateStanderValidator();
-	private final ExcelReaderPictureExecutor pictureExecutor = new ExcelReaderPictureStanderExecutor();
-	private final ExcelReaderRowParser<T> rowParser = loadRowParser();
-	private final ExcelReaderDataFormat csvDataFormat = new ExcelDefaultReaderDataFormat();
+	private final ExcelReaderFormatManager readerFormatManager;
+	private final ExcelReaderTemplateValidator templateValidator;
+	private final ExcelReaderPictureExecutor pictureExecutor;
+	private final ExcelReaderRowParser<T> rowParser;
+	private final ExcelReaderDataFormat csvDataFormat;
 
 	public ExcelReadKernel() {
+		this(ExcelRuntimeOptions.defaults());
+	}
+
+	public ExcelReadKernel(ExcelRuntimeOptions runtimeOptions) {
+		this.readerFormatManager = runtimeOptions.createReaderFormatManager();
+		this.templateValidator = runtimeOptions.createTemplateValidator();
+		this.pictureExecutor = runtimeOptions.createPictureExecutor();
+		this.rowParser = runtimeOptions.createRowParser();
+		this.csvDataFormat = runtimeOptions.createCsvDataFormat();
 	}
 
 	public void createWorkbook(ExcelReadContext<T> context) {
@@ -89,7 +86,9 @@ public class ExcelReadKernel<T extends ExcelBaseModel> {
 			if (context.getReaderContext().getReaderParam().getReadPicture()) {
 				sheetPictureMap = pictureExecutor.getSheetPictureMap(sheet);
 			}
-			parseRows(context, readModelEntry.getValue(), sheet, sheetPictureMap);
+			Map<String, Object> mergedCellValueMap = buildMergedCellValueMap(sheet, context.getFormulaEvaluator());
+			fillMergedCells(sheet, mergedCellValueMap);
+			parseRows(context, readModelEntry.getValue(), sheet, sheetPictureMap, mergedCellValueMap);
 		}
 	}
 
@@ -151,27 +150,16 @@ public class ExcelReadKernel<T extends ExcelBaseModel> {
 		}
 	}
 
-	@SuppressWarnings("unchecked")
-	private ExcelReaderRowParser<T> loadRowParser() {
-		ServiceLoader<ExcelReaderRowParser> serviceLoader = ServiceLoader.load(ExcelReaderRowParser.class);
-		List<ExcelReaderRowParser> rowParsers = new ArrayList<>();
-		for (ExcelReaderRowParser rowParser : serviceLoader) {
-			rowParsers.add(rowParser);
-		}
-		return (ExcelReaderRowParser<T>) rowParsers.stream()
-				.filter(rowParser -> !(rowParser instanceof ExcelReaderRowParserImpl))
-				.findFirst()
-				.orElse(new ExcelReaderRowParserImpl<>());
-	}
-
 	private void parseRows(ExcelReadContext<T> context, List<ExcelReaderModelContext<T>> readModelList,
-						   Sheet sheet, Map<String, List<ExcelReaderPictureModel>> sheetPictureMap) {
+						   Sheet sheet, Map<String, List<ExcelReaderPictureModel>> sheetPictureMap,
+						   Map<String, Object> mergedCellValueMap) {
 		for (int rowIndex = sheet.getFirstRowNum(); rowIndex <= sheet.getLastRowNum(); rowIndex++) {
 			Row row = sheet.getRow(rowIndex);
 			if (Objects.isNull(row) || rowBlank(row)) {
 				continue;
 			}
 			context.getReaderContext().getParserContext().setSheetPictureMap(sheetPictureMap);
+			context.getReaderContext().getParserContext().setMergedCellValueMap(mergedCellValueMap);
 			context.getReaderContext().getParserContext().setReadModelList(readModelList);
 			context.getReaderContext().getParserContext().setRow(row);
 			rowParser.rowParser(context.getReaderContext());
@@ -185,5 +173,50 @@ public class ExcelReadKernel<T extends ExcelBaseModel> {
 			}
 		}
 		return true;
+	}
+
+	private Map<String, Object> buildMergedCellValueMap(Sheet sheet, FormulaEvaluator formulaEvaluator) {
+		Map<String, Object> valueMap = new java.util.HashMap<>();
+		DataFormatter formatter = new DataFormatter();
+		for (int i = 0; i < sheet.getNumMergedRegions(); i++) {
+			org.apache.poi.ss.util.CellRangeAddress range = sheet.getMergedRegion(i);
+			Row firstRow = sheet.getRow(range.getFirstRow());
+			Cell firstCell = firstRow == null ? null : firstRow.getCell(range.getFirstColumn());
+			Object value = formatter.formatCellValue(firstCell, formulaEvaluator);
+			for (int rowIndex = range.getFirstRow(); rowIndex <= range.getLastRow(); rowIndex++) {
+				for (int colIndex = range.getFirstColumn(); colIndex <= range.getLastColumn(); colIndex++) {
+					valueMap.put(rowIndex + ":" + colIndex, value);
+				}
+			}
+		}
+		return valueMap;
+	}
+
+	private void fillMergedCells(Sheet sheet, Map<String, Object> mergedCellValueMap) {
+		if (mergedCellValueMap.isEmpty()) {
+			return;
+		}
+		for (int i = 0; i < sheet.getNumMergedRegions(); i++) {
+			org.apache.poi.ss.util.CellRangeAddress range = sheet.getMergedRegion(i);
+			Object value = mergedCellValueMap.get(range.getFirstRow() + ":" + range.getFirstColumn());
+			if (StringUtil.isEmpty(value)) {
+				continue;
+			}
+			for (int rowIndex = range.getFirstRow(); rowIndex <= range.getLastRow(); rowIndex++) {
+				Row row = sheet.getRow(rowIndex);
+				if (row == null) {
+					row = sheet.createRow(rowIndex);
+				}
+				for (int colIndex = range.getFirstColumn(); colIndex <= range.getLastColumn(); colIndex++) {
+					if (rowIndex == range.getFirstRow() && colIndex == range.getFirstColumn()) {
+						continue;
+					}
+					Cell cell = row.getCell(colIndex, Row.MissingCellPolicy.CREATE_NULL_AS_BLANK);
+					if (cell.getCellType() == CellType.BLANK) {
+						cell.setCellValue(String.valueOf(value));
+					}
+				}
+			}
+		}
 	}
 }

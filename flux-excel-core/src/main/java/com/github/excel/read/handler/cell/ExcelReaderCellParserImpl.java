@@ -46,11 +46,6 @@ import java.util.stream.Collectors;
  */
 @Slf4j
 public class ExcelReaderCellParserImpl<T extends ExcelBaseModel> extends AbstractExcelReaderCellParser<T> {
-    /**
-     * 当前解析行号
-     */
-    private Integer parserRow = ExcelConstant.MINUS_ONE_INT;
-
     @Override
     public void beforeParse(ExcelReaderContext<T> readerContext) {
 
@@ -175,6 +170,13 @@ public class ExcelReaderCellParserImpl<T extends ExcelBaseModel> extends Abstrac
         Class<?> parameterType = fieldConfig.getCacheImportFieldModel().getSetMethod().getParameterTypes()[ExcelConstant.ZERO_SHORT];
         // 获取值
         Object value = ExcelHelper.getCellValue(cell, parameterType,cellReference.formatAsString(),readerFormatManager.getFormulaEvaluator());
+        if (StringUtil.isEmpty(value) && Objects.nonNull(readerContext.getParserContext().getCellValue())) {
+            value = readerContext.getParserContext().getCellValue();
+        }
+        if (StringUtil.isEmpty(value) && readerContext.getParserContext().getMergedCellValueMap() != null) {
+            value = readerContext.getParserContext().getMergedCellValueMap()
+                    .get(cell.getRowIndex() + ":" + cell.getColumnIndex());
+        }
 
         T baseModel = getOrCreateModel(cell.getRowIndex(), listTitleConfig, readModel);
         baseModel.getModelColAddress().put(importFieldModel.getField(), cellReference.formatAsString());
@@ -323,11 +325,6 @@ public class ExcelReaderCellParserImpl<T extends ExcelBaseModel> extends Abstrac
         }
         Row titleRow = cell.getRow();
         int rowIndex = titleRow.getRowNum();
-        // 如果解析的行是之前解析过的行直接跳过
-        if (parserRow == rowIndex) {
-            return ;
-        }
-        parserRow = rowIndex;
         // 从第一列开始解析
         int colIndex = titleRow.getFirstCellNum(), lastColIndex = titleRow.getLastCellNum();
         for (; colIndex < lastColIndex; colIndex++) {

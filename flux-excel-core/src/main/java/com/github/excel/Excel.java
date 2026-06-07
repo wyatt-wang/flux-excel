@@ -7,8 +7,6 @@ import com.github.excel.fluent.ExcelLargeWriteBuilder;
 import com.github.excel.fluent.ExcelReadBuilder;
 import com.github.excel.fluent.ExcelWriteBuilder;
 
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
 import java.io.File;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -27,10 +25,6 @@ public final class Excel {
 
 	public static ExcelWriteBuilder write(File file) {
 		return ExcelWriteBuilder.toFile(file);
-	}
-
-	public static ExcelWriteBuilder write(HttpServletRequest request, HttpServletResponse response) {
-		return ExcelWriteBuilder.toResponse(request, response);
 	}
 
 	public static ExcelReadBuilder read(InputStream inputStream) {

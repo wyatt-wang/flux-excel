@@ -8,8 +8,6 @@ import com.github.excel.write.pipeline.batch.ExcelBatchWriteContext;
 import com.github.excel.write.pipeline.batch.ExcelBatchWritePipelines;
 import com.github.excel.write.style.AbstractExcelStyle;
 
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -20,7 +18,7 @@ public class ExcelBatchWriteBuilder {
 	private final Integer maxPoolSize;
 	private String fileName = "excel";
 	private String sheetName = "sheet";
-	private int rowAccessWindowSize = ExcelConstant.INT_10000;
+	private int rowAccessWindowSize = ExcelConstant.DEFAULT_ROW_ACCESS_WINDOW_SIZE;
 	private boolean compressTempFiles = false;
 	private boolean useSharedStringsTable = false;
 	private final List<Class<? extends AbstractExcelStyle>> styles = new ArrayList<>();
@@ -83,15 +81,6 @@ public class ExcelBatchWriteBuilder {
 		ExcelBatchWriteContext context = createContext();
 		context.setZipFileName(zipFileName);
 		ExcelBatchWritePipelines.zipPipeline().execute(context);
-		return this;
-	}
-
-	public ExcelBatchWriteBuilder export(HttpServletRequest request, HttpServletResponse response, String fileName) {
-		ExcelBatchWriteContext context = createContext();
-		context.setRequest(request);
-		context.setResponse(response);
-		context.setResponseFileName(fileName);
-		ExcelBatchWritePipelines.responsePipeline().execute(context);
 		return this;
 	}
 

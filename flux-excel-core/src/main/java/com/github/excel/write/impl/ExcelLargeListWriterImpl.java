@@ -8,7 +8,6 @@ import com.github.excel.helper.WorkbookHelper;
 import com.github.excel.model.ExcelBaseModel;
 import com.github.excel.model.ExcelCacheModel;
 import com.github.excel.model.ExcelCacheFieldModel;
-import com.github.excel.util.ExcelUtil;
 import com.github.excel.write.style.AbstractExcelStyle;
 import com.github.excel.write.BaseExcelWriter;
 import com.github.excel.write.ExcelLargeListWriter;
@@ -19,8 +18,6 @@ import org.apache.poi.ss.usermodel.CreationHelper;
 import org.apache.poi.xssf.streaming.SXSSFSheet;
 import org.apache.poi.xssf.streaming.SXSSFWorkbook;
 
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.io.File;
 import java.io.FileOutputStream;
@@ -47,7 +44,7 @@ public class ExcelLargeListWriterImpl extends BaseExcelWriter implements ExcelLa
 
 
 	public ExcelLargeListWriterImpl(String sheetName) {
-		this(sheetName, ExcelConstant.INT_1000000, null, ExcelConstant.INT_10000, false, false);
+		this(sheetName, ExcelConstant.INT_1000000, null, ExcelConstant.DEFAULT_ROW_ACCESS_WINDOW_SIZE, false, false);
 	}
 
 	public ExcelLargeListWriterImpl(String sheetName, int rowAccessWindowSize,
@@ -56,7 +53,7 @@ public class ExcelLargeListWriterImpl extends BaseExcelWriter implements ExcelLa
 	}
 
 	public ExcelLargeListWriterImpl(String sheetName, int sheetRowMaxCount) {
-		this(sheetName, sheetRowMaxCount, null, ExcelConstant.INT_10000, false, false);
+		this(sheetName, sheetRowMaxCount, null, ExcelConstant.DEFAULT_ROW_ACCESS_WINDOW_SIZE, false, false);
 	}
 
 	public ExcelLargeListWriterImpl(String sheetName, int sheetRowMaxCount,
@@ -65,7 +62,7 @@ public class ExcelLargeListWriterImpl extends BaseExcelWriter implements ExcelLa
 	}
 
 	public ExcelLargeListWriterImpl(String sheetName, int sheetRowMaxCount, Class<? extends ExcelBaseModel> listCla) {
-		this(sheetName, sheetRowMaxCount, listCla, ExcelConstant.INT_10000, false, false);
+		this(sheetName, sheetRowMaxCount, listCla, ExcelConstant.DEFAULT_ROW_ACCESS_WINDOW_SIZE, false, false);
 	}
 
 	public ExcelLargeListWriterImpl(String sheetName, int sheetRowMaxCount, Class<? extends ExcelBaseModel> listCla,
@@ -156,24 +153,6 @@ public class ExcelLargeListWriterImpl extends BaseExcelWriter implements ExcelLa
 				log.error("export failed cause:{}", Throwables.getStackTraceAsString(e));
 				throw new ExcelWriterException(e.getMessage());
 			}
-			workbook.dispose();
-			fontLocal.remove();
-			styleLocal.remove();
-			incrementSeqMap = Maps.newConcurrentMap();
-		}
-	}
-
-	public void export(HttpServletRequest request, HttpServletResponse response, String fileName) {
-		try {
-			CreationHelper creationHelper = workbook.getCreationHelper();
-			addNoResultData(workbook, creationHelper);
-			ExcelUtil.setResponseHeader(request, response, fileName, ExcelConstant.XLSX_STR);
-			OutputStream outputStream = response.getOutputStream();
-			workbook.write(outputStream);
-		} catch (IOException e) {
-			log.error(Throwables.getStackTraceAsString(e));
-			throw new ExcelWriterException(e.getMessage());
-		}finally {
 			workbook.dispose();
 			fontLocal.remove();
 			styleLocal.remove();

@@ -28,8 +28,6 @@ import com.github.excel.write.style.AbstractExcelStyle;
 import com.github.excel.util.DynamicExcelUtil;
 import com.github.excel.util.ExcelWatermarkUtil;
 
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -54,14 +52,12 @@ import org.apache.poi.ss.usermodel.Workbook;
 public class ExcelWriteBuilder {
 
 	private enum TargetType {
-		STREAM, FILE, RESPONSE
+		STREAM, FILE
 	}
 
 	private final TargetType targetType;
 	private final OutputStream outputStream;
 	private final File file;
-	private final HttpServletRequest request;
-	private final HttpServletResponse response;
 	private final ExcelWriter writer;
 	private final ExcelWriterParam writerParam;
 	private String sheetName = "sheet";
@@ -88,13 +84,10 @@ public class ExcelWriteBuilder {
 	private String watermarkText;
 	private ExcelCustomWriter customWriter;
 
-	private ExcelWriteBuilder(TargetType targetType, OutputStream outputStream, File file,
-							  HttpServletRequest request, HttpServletResponse response) {
+	private ExcelWriteBuilder(TargetType targetType, OutputStream outputStream, File file) {
 		this.targetType = targetType;
 		this.outputStream = outputStream;
 		this.file = file;
-		this.request = request;
-		this.response = response;
 		if (file != null) {
 			this.fileName = file.getName();
 			this.suffix = resolveSuffix(file.getName());
@@ -104,15 +97,11 @@ public class ExcelWriteBuilder {
 	}
 
 	public static ExcelWriteBuilder toStream(OutputStream outputStream) {
-		return new ExcelWriteBuilder(TargetType.STREAM, outputStream, null, null, null);
+		return new ExcelWriteBuilder(TargetType.STREAM, outputStream, null);
 	}
 
 	public static ExcelWriteBuilder toFile(File file) {
-		return new ExcelWriteBuilder(TargetType.FILE, null, file, null, null);
-	}
-
-	public static ExcelWriteBuilder toResponse(HttpServletRequest request, HttpServletResponse response) {
-		return new ExcelWriteBuilder(TargetType.RESPONSE, null, null, request, response);
+		return new ExcelWriteBuilder(TargetType.FILE, null, file);
 	}
 
 	public ExcelWriteBuilder fileName(String fileName) {
@@ -416,9 +405,6 @@ public class ExcelWriteBuilder {
 		if (targetType == TargetType.STREAM) {
 			return outputStream;
 		}
-		if (targetType == TargetType.RESPONSE) {
-			return response.getOutputStream();
-		}
 		return new FileOutputStream(file);
 	}
 
@@ -568,13 +554,17 @@ public class ExcelWriteBuilder {
 				continue;
 			}
 			if (headerStyleConfigurer != null) {
+				Map<Short, CellStyle> headerStyleCache = new LinkedHashMap<>();
 				for (Cell cell : headerRow) {
-					CellStyle cellStyle = workbook.createCellStyle();
 					CellStyle sourceStyle = cell.getCellStyle();
-					if (sourceStyle != null) {
-						cellStyle.cloneStyleFrom(sourceStyle);
-					}
-					headerStyleConfigurer.configure(cellStyle, workbook);
+					CellStyle cellStyle = headerStyleCache.computeIfAbsent(styleIndex(sourceStyle), key -> {
+						CellStyle newStyle = workbook.createCellStyle();
+						if (sourceStyle != null) {
+							newStyle.cloneStyleFrom(sourceStyle);
+						}
+						headerStyleConfigurer.configure(newStyle, workbook);
+						return newStyle;
+					});
 					cell.setCellStyle(cellStyle);
 				}
 			}
@@ -583,6 +573,7 @@ public class ExcelWriteBuilder {
 				if (columnIndex < 0) {
 					continue;
 				}
+				Map<Short, CellStyle> columnStyleCache = new LinkedHashMap<>();
 				for (int rowIndex = sheet.getFirstRowNum() + 1; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
 					Row row = sheet.getRow(rowIndex);
 					if (row == null) {
@@ -592,16 +583,23 @@ public class ExcelWriteBuilder {
 					if (cell == null) {
 						cell = row.createCell(columnIndex);
 					}
-					CellStyle cellStyle = workbook.createCellStyle();
 					CellStyle sourceStyle = cell.getCellStyle();
-					if (sourceStyle != null) {
-						cellStyle.cloneStyleFrom(sourceStyle);
-					}
-					entry.getValue().configure(cellStyle, workbook);
+					CellStyle cellStyle = columnStyleCache.computeIfAbsent(styleIndex(sourceStyle), key -> {
+						CellStyle newStyle = workbook.createCellStyle();
+						if (sourceStyle != null) {
+							newStyle.cloneStyleFrom(sourceStyle);
+						}
+						entry.getValue().configure(newStyle, workbook);
+						return newStyle;
+					});
 					cell.setCellStyle(cellStyle);
 				}
 			}
 		}
+	}
+
+	private short styleIndex(CellStyle cellStyle) {
+		return cellStyle == null ? -1 : cellStyle.getIndex();
 	}
 
 	private int resolveColumnIndex(Row headerRow, String fieldOrTitleName) {

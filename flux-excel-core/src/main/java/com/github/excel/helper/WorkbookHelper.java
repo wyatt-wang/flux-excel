@@ -147,7 +147,7 @@ public class WorkbookHelper {
 
     private static int resolveRowAccessWindowSize(Integer rowAccessWindowSize) {
         if (rowAccessWindowSize == null || rowAccessWindowSize == 0 || rowAccessWindowSize < -1) {
-            return com.github.excel.constant.ExcelConstant.INT_10000;
+            return com.github.excel.constant.ExcelConstant.DEFAULT_ROW_ACCESS_WINDOW_SIZE;
         }
         return rowAccessWindowSize;
     }

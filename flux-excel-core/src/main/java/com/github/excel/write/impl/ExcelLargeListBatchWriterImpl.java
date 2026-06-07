@@ -7,7 +7,6 @@ import com.github.excel.helper.WorkbookHelper;
 import com.github.excel.model.ExcelBaseModel;
 import com.github.excel.model.ExcelCacheModel;
 import com.github.excel.model.ExcelCacheFieldModel;
-import com.github.excel.util.ExcelUtil;
 import com.github.excel.util.StringUtil;
 import com.github.excel.util.ZipCompressUtil;
 import com.github.excel.write.*;
@@ -22,9 +21,6 @@ import org.apache.poi.ss.usermodel.CreationHelper;
 import org.apache.poi.xssf.streaming.SXSSFSheet;
 import org.apache.poi.xssf.streaming.SXSSFWorkbook;
 
-import jakarta.servlet.ServletOutputStream;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
 import java.io.*;
 import java.util.*;
 import java.util.concurrent.*;
@@ -62,7 +58,7 @@ public class ExcelLargeListBatchWriterImpl extends BaseExcelWriter implements Ex
 	}
 
 	public ExcelLargeListBatchWriterImpl(String outputDirPath ,Integer maxPoolSize) {
-		this(outputDirPath, maxPoolSize, ExcelConstant.INT_10000, false, false);
+		this(outputDirPath, maxPoolSize, ExcelConstant.DEFAULT_ROW_ACCESS_WINDOW_SIZE, false, false);
 	}
 
 	public ExcelLargeListBatchWriterImpl(String outputDirPath, Integer maxPoolSize, int rowAccessWindowSize,
@@ -146,33 +142,6 @@ public class ExcelLargeListBatchWriterImpl extends BaseExcelWriter implements Ex
 			throw new ExcelWriterException(e.getMessage());
 		}finally {
 			executorService.shutdown();
-			clearData();
-		}
-	}
-
-	@Override
-	public void export(HttpServletRequest request, HttpServletResponse response, String zipFileName) {
-		try {
-			export(zipFileName);
-			ExcelUtil.setResponseHeader(request, response, zipFileName, null);
-			ServletOutputStream outputStream = response.getOutputStream();
-			zipFileName+=ZIP_SUFFIX;
-			File zipFile = new File(dirFile + ExcelConstant.FILE_SEPARATOR + zipFileName);
-			try (InputStream inputStream = new FileInputStream(zipFile)) {
-				byte[] buffer = new byte[8192];
-				int length;
-				while ((length = inputStream.read(buffer)) != -1) {
-					outputStream.write(buffer, 0, length);
-				}
-				outputStream.flush();
-			}
-		} catch (UnsupportedEncodingException e) {
-			log.error("export failed cause:{}", Throwables.getStackTraceAsString(e));
-			throw new ExcelWriterException(e.getMessage());
-		} catch (IOException e) {
-			log.error("export failed cause:{}", Throwables.getStackTraceAsString(e));
-			throw new ExcelWriterException(e.getMessage());
-		}finally {
 			clearData();
 		}
 	}

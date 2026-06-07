@@ -92,6 +92,8 @@ public abstract class AbstractExcelReaderUserParser<T extends ExcelBaseModel> im
 				if (readerContext.getReaderParam().getReadPicture()) {
 					sheetPictureMap = pictureExecutor.getSheetPictureMap(sheet);
 				}
+				Map<String, Object> mergedCellValueMap = buildMergedCellValueMap(sheet);
+				fillMergedCells(sheet, mergedCellValueMap);
 				// 4.循环需要读取Excel Sheet 下面的所有行
 				int startRow = resolveStartRow(sheet, readModelList);
 				int endRow = resolveEndRow(sheet, readModelList);
@@ -115,6 +117,7 @@ public abstract class AbstractExcelReaderUserParser<T extends ExcelBaseModel> im
 					}
 					if(!rowBlank || !Boolean.TRUE.equals(readerContext.getReaderParam().getIgnoreEmptyRow())) {
 						readerContext.getParserContext().setSheetPictureMap(sheetPictureMap);
+						readerContext.getParserContext().setMergedCellValueMap(mergedCellValueMap);
 						readerContext.getParserContext().setReadModelList(readModelList);
 						readerContext.getParserContext().setRow(row);
 						EXCEL_READER_ROW_PARSER.rowParser(readerContext);
@@ -216,6 +219,51 @@ public abstract class AbstractExcelReaderUserParser<T extends ExcelBaseModel> im
 				.filter(Objects::nonNull)
 				.max(Integer::compareTo)
 				.orElse(null);
+	}
+
+	private Map<String, Object> buildMergedCellValueMap(Sheet sheet) {
+		Map<String, Object> valueMap = new HashMap<>();
+		DataFormatter formatter = new DataFormatter();
+		for (int i = 0; i < sheet.getNumMergedRegions(); i++) {
+			org.apache.poi.ss.util.CellRangeAddress range = sheet.getMergedRegion(i);
+			Row firstRow = sheet.getRow(range.getFirstRow());
+			Cell firstCell = firstRow == null ? null : firstRow.getCell(range.getFirstColumn());
+			Object value = formatter.formatCellValue(firstCell, readerFormatManager.getFormulaEvaluator());
+			for (int rowIndex = range.getFirstRow(); rowIndex <= range.getLastRow(); rowIndex++) {
+				for (int colIndex = range.getFirstColumn(); colIndex <= range.getLastColumn(); colIndex++) {
+					valueMap.put(rowIndex + ":" + colIndex, value);
+				}
+			}
+		}
+		return valueMap;
+	}
+
+	private void fillMergedCells(Sheet sheet, Map<String, Object> mergedCellValueMap) {
+		if (mergedCellValueMap.isEmpty()) {
+			return;
+		}
+		for (int i = 0; i < sheet.getNumMergedRegions(); i++) {
+			org.apache.poi.ss.util.CellRangeAddress range = sheet.getMergedRegion(i);
+			Object value = mergedCellValueMap.get(range.getFirstRow() + ":" + range.getFirstColumn());
+			if (StringUtil.isEmpty(value)) {
+				continue;
+			}
+			for (int rowIndex = range.getFirstRow(); rowIndex <= range.getLastRow(); rowIndex++) {
+				Row row = sheet.getRow(rowIndex);
+				if (row == null) {
+					row = sheet.createRow(rowIndex);
+				}
+				for (int colIndex = range.getFirstColumn(); colIndex <= range.getLastColumn(); colIndex++) {
+					if (rowIndex == range.getFirstRow() && colIndex == range.getFirstColumn()) {
+						continue;
+					}
+					Cell cell = row.getCell(colIndex, Row.MissingCellPolicy.CREATE_NULL_AS_BLANK);
+					if (cell.getCellType() == CellType.BLANK) {
+						cell.setCellValue(String.valueOf(value));
+					}
+				}
+			}
+		}
 	}
 
 }

@@ -3,6 +3,10 @@ package com.github.excel.fluent;
 import com.github.excel.boot.ExcelMetadataRegistry;
 import com.github.excel.model.ExcelCacheImportModel;
 import com.github.excel.model.ExcelBaseModel;
+import com.github.excel.model.ExcelCellComment;
+import com.github.excel.model.ExcelCellHyperlink;
+import com.github.excel.model.ExcelHeaderInfo;
+import com.github.excel.model.ExcelMergedCell;
 import com.github.excel.model.ExcelReadError;
 import com.github.excel.model.ExcelReadResult;
 import com.github.excel.model.ExcelSheetInfo;
@@ -20,10 +24,19 @@ import com.github.excel.read.handler.reader.ExcelReaderFactory;
 import com.github.excel.read.handler.row.ExcelReaderRowHandler;
 import com.github.excel.read.listener.ExcelReadListener;
 import com.github.excel.read.listener.ExcelReadListenerContext;
+import com.github.excel.read.pipeline.execution.ExcelReadExecutionContext;
+import com.github.excel.read.pipeline.execution.ExcelReadExecutionPipelines;
 import com.github.excel.util.DynamicExcelUtil;
+import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.Comment;
+import org.apache.poi.ss.usermodel.DataFormatter;
+import org.apache.poi.ss.usermodel.Hyperlink;
+import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
+import org.apache.poi.ss.util.CellRangeAddress;
+import org.apache.poi.ss.util.CellReference;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -39,6 +52,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class ExcelReadBuilder {
 
@@ -238,15 +252,15 @@ public class ExcelReadBuilder {
 	}
 
 	public ExcelReadBuilder parse() {
-		if (isCsvFile() && !csvListClasses.isEmpty()) {
-			parseCsvList();
-			notifyRowsFromResults();
-			notifyAfterAll();
-			return this;
-		}
-		reader.parse();
-		notifyRowsFromResults();
-		notifyAfterAll();
+		ExcelReadExecutionContext context = ExcelReadExecutionContext.builder()
+				.csvFile(isCsvFile())
+				.csvListRead(!csvListClasses.isEmpty())
+				.csvParser(this::parseCsvList)
+				.workbookParser(reader::parse)
+				.rowNotifier(this::notifyRowsFromResults)
+				.afterAllNotifier(this::notifyAfterAll)
+				.build();
+		ExcelReadExecutionPipelines.fluentReadPipeline().execute(context);
 		return this;
 	}
 
@@ -302,16 +316,148 @@ public class ExcelReadBuilder {
 		}
 		if (readerParam instanceof ExcelReaderFileParam) {
 			try (InputStream inputStream = new FileInputStream(((ExcelReaderFileParam) readerParam).getFile())) {
-				cachedMapList = DynamicExcelUtil.readMapList(inputStream, readerParam.getTemplate());
+				cachedMapList = DynamicExcelUtil.readMapList(inputStream, readerParam.getTemplate(), sheetIndex, sheetName,
+						headRowNumber, dataStartRow, dataEndRow, maxRows,
+						Boolean.TRUE.equals(readerParam.getTrimString()),
+						Boolean.TRUE.equals(readerParam.getIgnoreEmptyRow()), true);
 			} catch (FileNotFoundException e) {
 				throw new IllegalStateException("Read excel map list file failed", e);
 			} catch (IOException e) {
 				throw new IllegalStateException("Read excel map list file failed", e);
 			}
 		} else {
-			cachedMapList = DynamicExcelUtil.readMapList(((ExcelReaderStreamParam) readerParam).getStream(), readerParam.getTemplate());
+			cachedMapList = DynamicExcelUtil.readMapList(((ExcelReaderStreamParam) readerParam).getStream(), readerParam.getTemplate(),
+					sheetIndex, sheetName, headRowNumber, dataStartRow, dataEndRow, maxRows,
+					Boolean.TRUE.equals(readerParam.getTrimString()),
+					Boolean.TRUE.equals(readerParam.getIgnoreEmptyRow()), true);
 		}
 		return applyHeaderAliases(cachedMapList);
+	}
+
+	public List<String> headers() {
+		List<String> headers = new ArrayList<>();
+		for (ExcelHeaderInfo headerInfo : readHeaders()) {
+			headers.add(headerInfo.getTitle());
+		}
+		return headers;
+	}
+
+	public List<ExcelHeaderInfo> readHeaders() {
+		return inspectWorkbook(workbook -> {
+			Sheet sheet = resolveSheet(workbook);
+			if (sheet == null) {
+				return new ArrayList<>();
+			}
+			DataFormatter formatter = new DataFormatter();
+			int headerRowIndex = headRowNumber == null ? sheet.getFirstRowNum() : headRowNumber;
+			Row headerRow = sheet.getRow(headerRowIndex);
+			List<ExcelHeaderInfo> headers = new ArrayList<>();
+			for (int colIndex = 0; headerRow != null && colIndex < headerRow.getLastCellNum(); colIndex++) {
+				Cell cell = headerRow.getCell(colIndex);
+				String title = formatter.formatCellValue(cell);
+				if (Boolean.TRUE.equals(readerParam.getTrimString()) && title != null) {
+					title = title.trim();
+				}
+				headers.add(new ExcelHeaderInfo()
+						.setSheetIndex(workbook.getSheetIndex(sheet))
+						.setSheetName(sheet.getSheetName())
+						.setRowIndex(headerRowIndex)
+						.setColIndex(colIndex)
+						.setTitle(title));
+			}
+			return headers;
+		});
+	}
+
+	public List<ExcelCellComment> comments() {
+		return readComments();
+	}
+
+	public List<ExcelCellComment> readComments() {
+		return inspectWorkbook(workbook -> {
+			DataFormatter formatter = new DataFormatter();
+			List<ExcelCellComment> comments = new ArrayList<>();
+			for (Sheet sheet : resolveSheets(workbook)) {
+				for (Row row : sheet) {
+					for (Cell cell : row) {
+						Comment comment = cell.getCellComment();
+						if (comment == null) {
+							continue;
+						}
+						comments.add(new ExcelCellComment()
+								.setSheetIndex(workbook.getSheetIndex(sheet))
+								.setSheetName(sheet.getSheetName())
+								.setRowIndex(cell.getRowIndex())
+								.setColIndex(cell.getColumnIndex())
+								.setCellRef(cell.getAddress().formatAsString())
+								.setAuthor(comment.getAuthor())
+								.setText(comment.getString() == null ? null : comment.getString().getString())
+								.setCellValue(formatter.formatCellValue(cell)));
+					}
+				}
+			}
+			return comments;
+		});
+	}
+
+	public List<ExcelCellHyperlink> hyperlinks() {
+		return readHyperlinks();
+	}
+
+	public List<ExcelCellHyperlink> readHyperlinks() {
+		return inspectWorkbook(workbook -> {
+			DataFormatter formatter = new DataFormatter();
+			List<ExcelCellHyperlink> hyperlinks = new ArrayList<>();
+			for (Sheet sheet : resolveSheets(workbook)) {
+				for (Row row : sheet) {
+					for (Cell cell : row) {
+						Hyperlink hyperlink = cell.getHyperlink();
+						if (hyperlink == null) {
+							continue;
+						}
+						hyperlinks.add(new ExcelCellHyperlink()
+								.setSheetIndex(workbook.getSheetIndex(sheet))
+								.setSheetName(sheet.getSheetName())
+								.setRowIndex(cell.getRowIndex())
+								.setColIndex(cell.getColumnIndex())
+								.setCellRef(cell.getAddress().formatAsString())
+								.setAddress(hyperlink.getAddress())
+								.setLabel(hyperlink.getLabel())
+								.setType(hyperlink.getType() == null ? null : hyperlink.getType().name())
+								.setCellValue(formatter.formatCellValue(cell)));
+					}
+				}
+			}
+			return hyperlinks;
+		});
+	}
+
+	public List<ExcelMergedCell> mergedCells() {
+		return readMergedCells();
+	}
+
+	public List<ExcelMergedCell> readMergedCells() {
+		return inspectWorkbook(workbook -> {
+			DataFormatter formatter = new DataFormatter();
+			List<ExcelMergedCell> mergedCells = new ArrayList<>();
+			for (Sheet sheet : resolveSheets(workbook)) {
+				for (int i = 0; i < sheet.getNumMergedRegions(); i++) {
+					CellRangeAddress range = sheet.getMergedRegion(i);
+					Row firstRow = sheet.getRow(range.getFirstRow());
+					Cell firstCell = firstRow == null ? null : firstRow.getCell(range.getFirstColumn());
+					mergedCells.add(new ExcelMergedCell()
+							.setSheetIndex(workbook.getSheetIndex(sheet))
+							.setSheetName(sheet.getSheetName())
+							.setFirstRow(range.getFirstRow())
+							.setLastRow(range.getLastRow())
+							.setFirstCol(range.getFirstColumn())
+							.setLastCol(range.getLastColumn())
+							.setCellRange(range.formatAsString())
+							.setValue(formatter.formatCellValue(firstCell)));
+				}
+			}
+			return mergedCells;
+		});
 	}
 
 	public List<ExcelSheetInfo> sheets() {
@@ -348,10 +494,68 @@ public class ExcelReadBuilder {
 		return readerParam.getTemplate() != null && readerParam.getTemplate().toLowerCase().endsWith(".csv");
 	}
 
+	private interface WorkbookInspector<R> {
+		R inspect(Workbook workbook) throws Exception;
+	}
+
+	private <R> R inspectWorkbook(WorkbookInspector<R> inspector) {
+		if (isCsvFile()) {
+			throw new IllegalStateException("CSV files do not contain workbook metadata");
+		}
+		try (InputStream inputStream = openInputStream();
+			 Workbook workbook = WorkbookFactory.create(inputStream)) {
+			return inspector.inspect(workbook);
+		} catch (Exception e) {
+			throw new IllegalStateException("Inspect excel workbook failed", e);
+		}
+	}
+
+	private InputStream openInputStream() throws FileNotFoundException {
+		if (readerParam instanceof ExcelReaderFileParam) {
+			return new FileInputStream(((ExcelReaderFileParam) readerParam).getFile());
+		}
+		return ((ExcelReaderStreamParam) readerParam).getStream();
+	}
+
+	private Sheet resolveSheet(Workbook workbook) {
+		if (sheetName != null && !sheetName.trim().isEmpty()) {
+			return workbook.getSheet(sheetName);
+		}
+		return workbook.getSheetAt(sheetIndex);
+	}
+
+	private List<Sheet> resolveSheets(Workbook workbook) {
+		List<Sheet> sheets = new ArrayList<>();
+		Sheet selectedSheet = resolveSheet(workbook);
+		if (selectedSheet != null) {
+			sheets.add(selectedSheet);
+		}
+		return sheets;
+	}
+
 	private void parseCsvList() {
-		List<Map<String, Object>> rows = mapList();
 		for (Class<? extends ExcelBaseModel> modelClass : csvListClasses) {
-			csvListResultMap.put(modelClass, convertCsvRows(rows, modelClass));
+			csvListResultMap.put(modelClass, new ArrayList<>());
+		}
+		try (InputStream inputStream = openInputStream()) {
+			AtomicInteger dataRowIndex = new AtomicInteger(0);
+			AtomicInteger acceptedRows = new AtomicInteger(0);
+			DynamicExcelUtil.readCsv(inputStream, row -> {
+				int currentDataRow = dataRowIndex.incrementAndGet();
+				if (!csvRowInRange(currentDataRow, acceptedRows.get())) {
+					return;
+				}
+				Map<String, Object> mappedRow = applyHeaderAliases(row);
+				for (Class<? extends ExcelBaseModel> modelClass : csvListClasses) {
+					List<ExcelBaseModel> modelRows = (List<ExcelBaseModel>) csvListResultMap.get(modelClass);
+					modelRows.add(convertCsvRow(mappedRow, modelClass));
+				}
+				acceptedRows.incrementAndGet();
+			});
+		} catch (FileNotFoundException e) {
+			throw new IllegalStateException("Read csv model list file failed", e);
+		} catch (IOException e) {
+			throw new IllegalStateException("Read csv model list file failed", e);
 		}
 	}
 
@@ -443,27 +647,57 @@ public class ExcelReadBuilder {
 		return result;
 	}
 
+	private Map<String, Object> applyHeaderAliases(Map<String, Object> row) {
+		if (headerAliases.isEmpty() || row == null) {
+			return row;
+		}
+		Map<String, Object> mapped = new LinkedHashMap<>();
+		for (Map.Entry<String, Object> entry : row.entrySet()) {
+			mapped.put(headerAliases.getOrDefault(entry.getKey(), entry.getKey()), entry.getValue());
+		}
+		return mapped;
+	}
+
 	private <T extends ExcelBaseModel> List<T> convertCsvRows(List<Map<String, Object>> rows, Class<T> modelClass) {
 		ExcelCacheImportModel cacheModel = ExcelMetadataRegistry.getExcelCacheImportMapValue(modelClass);
 		List<T> result = new ArrayList<>();
 		for (Map<String, Object> row : rows) {
-			try {
-				T model = modelClass.getDeclaredConstructor().newInstance();
-				for (Map.Entry<String, ExcelCacheImportModel.ExcelCacheImportFieldModel> entry : cacheModel.getFieldModelMap().entrySet()) {
-					if (!row.containsKey(entry.getKey())) {
-						continue;
-					}
-					ExcelCacheImportModel.ExcelCacheImportFieldModel fieldModel = entry.getValue();
-					Class<?> targetType = fieldModel.getSetMethod().getParameterTypes()[0];
-					Object value = csvDataFormat.format(row.get(entry.getKey()), fieldModel.getImportProperty().formatPattern(), wrapPrimitive(targetType));
-					fieldModel.getSetMethod().invoke(model, value);
-				}
-				result.add(model);
-			} catch (InstantiationException | IllegalAccessException | InvocationTargetException | NoSuchMethodException | ParseException e) {
-				throw new IllegalStateException("Read csv model list failed", e);
-			}
+			result.add(convertCsvRow(row, modelClass, cacheModel));
 		}
 		return result;
+	}
+
+	private <T extends ExcelBaseModel> T convertCsvRow(Map<String, Object> row, Class<T> modelClass) {
+		return convertCsvRow(row, modelClass, ExcelMetadataRegistry.getExcelCacheImportMapValue(modelClass));
+	}
+
+	private <T extends ExcelBaseModel> T convertCsvRow(Map<String, Object> row, Class<T> modelClass,
+													   ExcelCacheImportModel cacheModel) {
+		try {
+			T model = modelClass.getDeclaredConstructor().newInstance();
+			for (Map.Entry<String, ExcelCacheImportModel.ExcelCacheImportFieldModel> entry : cacheModel.getFieldModelMap().entrySet()) {
+				if (!row.containsKey(entry.getKey())) {
+					continue;
+				}
+				ExcelCacheImportModel.ExcelCacheImportFieldModel fieldModel = entry.getValue();
+				Class<?> targetType = fieldModel.getSetMethod().getParameterTypes()[0];
+				Object value = csvDataFormat.format(row.get(entry.getKey()), fieldModel.getImportProperty().formatPattern(), wrapPrimitive(targetType));
+				fieldModel.getSetMethod().invoke(model, value);
+			}
+			return model;
+		} catch (InstantiationException | IllegalAccessException | InvocationTargetException | NoSuchMethodException | ParseException e) {
+			throw new IllegalStateException("Read csv model list failed", e);
+		}
+	}
+
+	private boolean csvRowInRange(int dataRowIndex, int acceptedRows) {
+		if (dataStartRow != null && dataRowIndex < dataStartRow) {
+			return false;
+		}
+		if (dataEndRow != null && dataRowIndex > dataEndRow) {
+			return false;
+		}
+		return maxRows == null || acceptedRows < maxRows;
 	}
 
 	private Class<?> wrapPrimitive(Class<?> targetType) {

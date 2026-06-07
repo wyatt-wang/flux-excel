@@ -49,6 +49,10 @@ public class ExcelReaderParserContext<T extends ExcelBaseModel> {
      */
     private Map<String, List<ExcelReaderPictureModel>> sheetPictureMap;
     /**
+     * 合并单元格填充值，key 为 rowIndex:colIndex
+     */
+    private Map<String, Object> mergedCellValueMap;
+    /**
      * 行
      */
     private Row row;

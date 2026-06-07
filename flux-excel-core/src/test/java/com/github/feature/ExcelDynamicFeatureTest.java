@@ -7,6 +7,19 @@ import com.github.excel.annotation.ExcelWrite;
 import com.github.excel.annotation.ExcelWriteProperty;
 import com.github.excel.enums.ExcelSuffixEnum;
 import com.github.excel.model.ExcelBaseModel;
+import com.github.excel.model.ExcelCellComment;
+import com.github.excel.model.ExcelCellHyperlink;
+import com.github.excel.model.ExcelHeaderInfo;
+import com.github.excel.model.ExcelMergedCell;
+import org.apache.poi.common.usermodel.HyperlinkType;
+import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.ClientAnchor;
+import org.apache.poi.ss.usermodel.Comment;
+import org.apache.poi.ss.usermodel.CreationHelper;
+import org.apache.poi.ss.usermodel.Drawing;
+import org.apache.poi.ss.usermodel.Hyperlink;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.apache.poi.xssf.usermodel.XSSFSheet;
@@ -190,6 +203,115 @@ public class ExcelDynamicFeatureTest {
         }
     }
 
+    @Test
+    public void readsWorkbookHeadersCommentsHyperlinksAndMergedCells() throws Exception {
+        byte[] workbookBytes = createWorkbookWithMetadata();
+
+        List<ExcelHeaderInfo> headers = Excel.read(new ByteArrayInputStream(workbookBytes))
+                .fileName("metadata.xlsx")
+                .headRowNumber(1)
+                .readHeaders();
+        assertEquals(2, headers.size());
+        assertEquals("姓名", headers.get(0).getTitle());
+        assertEquals(Integer.valueOf(1), headers.get(0).getRowIndex());
+
+        List<ExcelCellComment> comments = Excel.read(new ByteArrayInputStream(workbookBytes))
+                .fileName("metadata.xlsx")
+                .readComments();
+        assertEquals(1, comments.size());
+        assertEquals("必填", comments.get(0).getText());
+        assertEquals("system", comments.get(0).getAuthor());
+
+        List<ExcelCellHyperlink> hyperlinks = Excel.read(new ByteArrayInputStream(workbookBytes))
+                .fileName("metadata.xlsx")
+                .readHyperlinks();
+        assertEquals(1, hyperlinks.size());
+        assertEquals("https://github.com/wyatt-wang/flux-excel", hyperlinks.get(0).getAddress());
+
+        List<ExcelMergedCell> mergedCells = Excel.read(new ByteArrayInputStream(workbookBytes))
+                .fileName("metadata.xlsx")
+                .readMergedCells();
+        assertEquals(1, mergedCells.size());
+        assertEquals("A3:A4", mergedCells.get(0).getCellRange());
+        assertEquals("Alice", mergedCells.get(0).getValue());
+    }
+
+    @Test
+    public void readsDynamicHeadersAndMergedTableData() throws Exception {
+        byte[] workbookBytes = createWorkbookWithMetadata();
+
+        List<String> headers = Excel.read(new ByteArrayInputStream(workbookBytes))
+                .fileName("metadata.xlsx")
+                .headRowNumber(1)
+                .headers();
+        assertEquals(Arrays.asList("姓名", "主页"), headers);
+
+        List<Map<String, Object>> rows = Excel.read(new ByteArrayInputStream(workbookBytes))
+                .fileName("metadata.xlsx")
+                .headRowNumber(1)
+                .dataStartRow(2)
+                .mapList();
+        assertEquals(2, rows.size());
+        assertEquals("Alice", rows.get(0).get("姓名"));
+        assertEquals("Alice", rows.get(1).get("姓名"));
+        assertEquals("20", rows.get(1).get("主页"));
+    }
+
+    @Test
+    public void readsMergedCellsIntoAnnotatedModel() throws Exception {
+        byte[] workbookBytes = createWorkbookWithMetadata();
+
+        List<MergedReadDto> rows = Excel.read(new ByteArrayInputStream(workbookBytes))
+                .fileName("metadata.xlsx")
+                .list(MergedReadDto.class)
+                .parse()
+                .getList(MergedReadDto.class);
+
+        assertEquals(2, rows.size());
+        assertEquals("Alice", rows.get(0).getName());
+        assertEquals("Alice", rows.get(1).getName());
+        assertEquals("20", rows.get(1).getHome());
+    }
+
+    private byte[] createWorkbookWithMetadata() throws Exception {
+        try (XSSFWorkbook workbook = new XSSFWorkbook();
+             ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+            XSSFSheet sheet = workbook.createSheet("metadata");
+            Row header = sheet.createRow(1);
+            header.createCell(0).setCellValue("姓名");
+            header.createCell(1).setCellValue("主页");
+
+            Row firstDataRow = sheet.createRow(2);
+            Cell nameCell = firstDataRow.createCell(0);
+            nameCell.setCellValue("Alice");
+            Cell linkCell = firstDataRow.createCell(1);
+            linkCell.setCellValue("flux-excel");
+
+            Row secondDataRow = sheet.createRow(3);
+            secondDataRow.createCell(1).setCellValue("20");
+            sheet.addMergedRegion(new CellRangeAddress(2, 3, 0, 0));
+
+            CreationHelper creationHelper = workbook.getCreationHelper();
+            Drawing<?> drawing = sheet.createDrawingPatriarch();
+            ClientAnchor anchor = creationHelper.createClientAnchor();
+            anchor.setCol1(0);
+            anchor.setCol2(2);
+            anchor.setRow1(1);
+            anchor.setRow2(3);
+            Comment comment = drawing.createCellComment(anchor);
+            comment.setAuthor("system");
+            comment.setString(creationHelper.createRichTextString("必填"));
+            header.getCell(0).setCellComment(comment);
+
+            Hyperlink hyperlink = creationHelper.createHyperlink(HyperlinkType.URL);
+            hyperlink.setAddress("https://github.com/wyatt-wang/flux-excel");
+            linkCell.setHyperlink(hyperlink);
+
+            workbook.write(outputStream);
+            return outputStream.toByteArray();
+        }
+    }
+
     @ExcelWrite(incrementSequenceNo = true)
     public static class SequenceDto extends ExcelBaseModel {
         @ExcelWriteProperty(titleName = "姓名")
@@ -244,6 +366,31 @@ public class ExcelDynamicFeatureTest {
 
         public void setAge(Integer age) {
             this.age = age;
+        }
+    }
+
+    @ExcelRead
+    public static class MergedReadDto extends ExcelBaseModel {
+        @ExcelReadProperty(titleName = "姓名")
+        private String name;
+
+        @ExcelReadProperty(titleName = "主页")
+        private String home;
+
+        public String getName() {
+            return name;
+        }
+
+        public void setName(String name) {
+            this.name = name;
+        }
+
+        public String getHome() {
+            return home;
+        }
+
+        public void setHome(String home) {
+            this.home = home;
         }
     }
 }

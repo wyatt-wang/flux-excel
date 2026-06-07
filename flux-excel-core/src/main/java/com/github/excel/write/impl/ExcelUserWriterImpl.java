@@ -2,6 +2,7 @@ package com.github.excel.write.impl;
 
 import com.github.excel.boot.ExcelBootLoader;
 import com.github.excel.constant.ExcelErrorMsgConstant;
+import com.github.excel.engine.ExcelEngine;
 import com.github.excel.enums.ExcelSuffixEnum;
 import com.github.excel.exception.ExcelWriterException;
 import com.github.excel.helper.ExcelValidationHelper;
@@ -20,21 +21,16 @@ import com.github.excel.param.ExcelWriterModelParam;
 import com.github.excel.param.ExcelWriterNumberScopeParam;
 import com.github.excel.param.ExcelWriterParam;
 import com.github.excel.param.ExcelWriterSteamParam;
-import com.github.excel.util.ExcelUtil;
 import com.github.excel.util.StringUtil;
 import com.github.excel.write.BaseExcelWriter;
 import com.github.excel.write.ExcelCustomWriter;
-import com.github.excel.write.ExcelWriteKernel;
 import com.github.excel.write.ExcelWriter;
 import com.github.excel.write.pipeline.ExcelWriteContext;
-import com.github.excel.write.pipeline.ExcelWritePipelines;
 import com.github.excel.write.style.AbstractExcelStyle;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.CellStyle;
 import org.apache.poi.ss.usermodel.Font;
 
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.groups.Default;
 import java.io.File;
 import java.io.FileOutputStream;
@@ -185,30 +181,14 @@ public class ExcelUserWriterImpl extends BaseExcelWriter implements ExcelWriter 
                 .runtimeTypeConverters(runtimeTypeConverters)
                 .runtimeFieldConverters(runtimeFieldConverters)
                 .build();
-        ExcelWritePipelines.workbookPipeline(new ExcelWriteKernel()).execute(context);
+        ExcelEngine.getDefault().createWritePipeline().execute(context);
         clearData();
         return this;
     }
 
     @Override
-    public ExcelWriter export(HttpServletRequest request, HttpServletResponse response, String fileName, ExcelSuffixEnum suffixEnum) {
-        try {
-            ExcelUtil.setResponseHeader(request, response, fileName, suffixEnum.getSuffix());
-            export(response.getOutputStream(), fileName, suffixEnum);
-            return this;
-        } catch (IOException e) {
-            throw new ExcelWriterException(e);
-        }
-    }
-
-    @Override
     public ExcelWriter process(OutputStream outputStream, String fileName, ExcelSuffixEnum suffixEnum) {
         return export(outputStream, fileName, suffixEnum);
-    }
-
-    @Override
-    public ExcelWriter process(HttpServletRequest request, HttpServletResponse response, String fileName, ExcelSuffixEnum suffixEnum) {
-        return export(request, response, fileName, suffixEnum);
     }
 
     @Override

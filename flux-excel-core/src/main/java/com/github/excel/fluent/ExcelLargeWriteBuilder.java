@@ -21,7 +21,7 @@ public class ExcelLargeWriteBuilder {
 	private ExcelLargeListWriter writer;
 	private String sheetName = "sheet";
 	private int sheetRowMaxCount = 0;
-	private int rowAccessWindowSize = ExcelConstant.INT_10000;
+	private int rowAccessWindowSize = ExcelConstant.DEFAULT_ROW_ACCESS_WINDOW_SIZE;
 	private boolean compressTempFiles = false;
 	private boolean useSharedStringsTable = false;
 	private Boolean noneDataTips;

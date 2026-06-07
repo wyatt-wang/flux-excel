@@ -161,7 +161,7 @@ public class BaseExcelWriter {
 			if (excelName.endsWith(ExcelConstant.XLSX_STR)) {
 				if (streaming) {
 					workbookThreadLocal = WorkbookCachePool.addBasicStyle(WorkbookHelper.createStreamingXlsxWorkBook(
-							ExcelConstant.INT_10000,
+							ExcelConstant.DEFAULT_ROW_ACCESS_WINDOW_SIZE,
 							false,
 							false
 					));

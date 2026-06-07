@@ -18,14 +18,6 @@ public final class ExcelBatchWritePipelines {
 		);
 	}
 
-	public static ExcelBatchWritePipeline responsePipeline() {
-		return new ExcelBatchWritePipeline(
-				new ApplyBatchStylesStep(),
-				new WriteBatchListsStep(),
-				context -> context.getWriter().export(context.getRequest(), context.getResponse(), context.getResponseFileName())
-		);
-	}
-
 	private static class ApplyBatchStylesStep implements ExcelBatchWriteStep {
 		@Override
 		public void execute(ExcelBatchWriteContext context) {

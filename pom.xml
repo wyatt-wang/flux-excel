@@ -8,6 +8,33 @@
     <artifactId>flux-excel</artifactId>
     <packaging>pom</packaging>
     <version>1.0.0.RELEASE</version>
+    <name>flux-excel</name>
+    <description>A Java Excel import and export toolkit built on Apache POI.</description>
+    <url>https://github.com/wyatt-wang/flux-excel</url>
+
+    <licenses>
+        <license>
+            <name>Apache License, Version 2.0</name>
+            <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+
+    <developers>
+        <developer>
+            <id>wyatt-wang</id>
+            <name>wyatt-wang</name>
+            <url>https://github.com/wyatt-wang</url>
+        </developer>
+    </developers>
+
+    <scm>
+        <connection>scm:git:https://github.com/wyatt-wang/flux-excel.git</connection>
+        <developerConnection>scm:git:ssh://git@github.com/wyatt-wang/flux-excel.git</developerConnection>
+        <url>https://github.com/wyatt-wang/flux-excel</url>
+        <tag>HEAD</tag>
+    </scm>
+
     <modules>
         <module>flux-excel-core</module>
         <module>flux-excel-spring-boot-starter</module>
@@ -20,7 +47,10 @@
         <lombok.version>1.18.38</lombok.version>
         <guava.version>33.4.0-jre</guava.version>
         <maven-source-plugin.version>3.2.1</maven-source-plugin.version>
+        <maven-javadoc-plugin.version>3.11.2</maven-javadoc-plugin.version>
         <maven-compiler-plugin.version>3.14.0</maven-compiler-plugin.version>
+        <maven-gpg-plugin.version>3.2.7</maven-gpg-plugin.version>
+        <central-publishing-maven-plugin.version>0.9.0</central-publishing-maven-plugin.version>
         <commons-lang3.version>3.17.0</commons-lang3.version>
         <!-- 文件拷贝时的编码 -->
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -78,7 +108,7 @@
                     </annotationProcessorPaths>
                 </configuration>
             </plugin>
-           <!-- <plugin>
+            <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-source-plugin</artifactId>
                 <version>${maven-source-plugin.version}</version>
@@ -90,7 +120,65 @@
                         </goals>
                     </execution>
                 </executions>
-            </plugin>-->
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-javadoc-plugin</artifactId>
+                <version>${maven-javadoc-plugin.version}</version>
+                <configuration>
+                    <doclint>none</doclint>
+                    <source>21</source>
+                    <encoding>UTF-8</encoding>
+                    <detectJavaApiLink>false</detectJavaApiLink>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>attach-javadocs</id>
+                        <goals>
+                            <goal>jar</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
         </plugins>
     </build>
+
+    <profiles>
+        <profile>
+            <id>release</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-gpg-plugin</artifactId>
+                        <version>${maven-gpg-plugin.version}</version>
+                        <configuration>
+                            <signer>bc</signer>
+                            <keyFilePath>${gpg.keyFilePath}</keyFilePath>
+                        </configuration>
+                        <executions>
+                            <execution>
+                                <id>sign-artifacts</id>
+                                <phase>verify</phase>
+                                <goals>
+                                    <goal>sign</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.sonatype.central</groupId>
+                        <artifactId>central-publishing-maven-plugin</artifactId>
+                        <version>${central-publishing-maven-plugin.version}</version>
+                        <extensions>true</extensions>
+                        <configuration>
+                            <publishingServerId>central</publishingServerId>
+                            <autoPublish>false</autoPublish>
+                            <waitUntil>validated</waitUntil>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>

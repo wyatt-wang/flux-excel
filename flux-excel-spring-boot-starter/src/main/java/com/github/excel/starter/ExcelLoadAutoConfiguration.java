@@ -11,10 +11,10 @@ import com.github.excel.constant.ExcelConstant;
 import com.github.excel.write.ExcelLargeListWriter;
 import com.github.excel.write.impl.ExcelLargeListWriterImpl;
 import lombok.extern.java.Log;
-import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
-import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.support.ResourcePatternResolver;
@@ -31,7 +31,6 @@ import java.util.Objects;
  * @Description: Excel加载自动配置
  */
 @AutoConfiguration
-@EnableConfigurationProperties({ExcelProperties.class,})
 @Log
 public class ExcelLoadAutoConfiguration {
 
@@ -43,6 +42,13 @@ public class ExcelLoadAutoConfiguration {
 
 	@Autowired
 	private ResourcePatternResolver resourcePatternResolver;
+
+	@Bean
+	@ConditionalOnMissingBean
+	@ConfigurationProperties(prefix = "excel")
+	public ExcelProperties excelProperties() {
+		return new ExcelProperties();
+	}
 
 	@Bean
 	@ConditionalOnMissingBean

@@ -1,10 +1,9 @@
 package com.github.excel.read.handler.parser;
 
 import com.github.excel.context.ExcelReaderContext;
+import com.github.excel.engine.ExcelEngine;
 import com.github.excel.model.ExcelBaseModel;
-import com.github.excel.read.ExcelReadKernel;
 import com.github.excel.read.pipeline.ExcelReadContext;
-import com.github.excel.read.pipeline.ExcelReadPipelines;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -27,6 +26,6 @@ public class ExcelUserReaderParserImpl<T extends ExcelBaseModel> implements Exce
 		ExcelReadContext<T> context = ExcelReadContext.<T>builder()
 				.readerContext(readerContext)
 				.build();
-		ExcelReadPipelines.userReadPipeline(new ExcelReadKernel<T>()).execute(context);
+		ExcelEngine.getDefault().<T>createReadPipeline().execute(context);
 	}
 }

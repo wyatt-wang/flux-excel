@@ -16,6 +16,11 @@ flux-excel 是一个基于 Apache POI 的 Java Excel 导入导出工具库，目
 - 支持 `java.util.Date`、`Calendar` 和常用 `java.time` 类型的导入导出格式化。
 - 支持普通对象、列表和 `List<Map<String, Object>>` 动态表导入导出。
 - 支持普通 Workbook 读取和事件模式读取。
+- 支持读取表头。
+- 支持批注读取。
+- 支持超链接读取。
+- 支持合并单元格读取。
+- 支持动态表头及表格数据。
 - 支持 `.xls`、`.xlsx` 和 `.csv`。
 - 支持模板导出和模板校验。
 - 支持导出文字水印、空数据自定义表头。

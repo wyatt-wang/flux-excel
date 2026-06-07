@@ -3,8 +3,6 @@ package com.github.excel.write;
 import com.github.excel.model.ExcelBaseModel;
 import com.github.excel.write.style.AbstractExcelStyle;
 
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
 import java.util.List;
 
 /**
@@ -36,14 +34,6 @@ public interface ExcelLargeListBatchWriter {
 	 * @param zipFileName
 	 */
 	void export(String zipFileName);
-
-	/**
-	 * 执行导出，导出到客户端
-	 *
-	 * @param request
-	 * @param response
-	 */
-	void export(HttpServletRequest request, HttpServletResponse response, String fileName);
 
 	/**
 	 * 添加样式

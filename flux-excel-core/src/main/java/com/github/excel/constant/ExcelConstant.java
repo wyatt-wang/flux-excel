@@ -102,6 +102,8 @@ public class ExcelConstant {
 
 	public static final int INT_10000 = 10000;
 
+	public static final int DEFAULT_ROW_ACCESS_WINDOW_SIZE = INT_1000;
+
 	public static final Integer INT_NEGATIVE_9999 = -9999;
 	public static final String BYTE_ARRAY_STR = "byte[]";
 

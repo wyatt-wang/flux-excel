@@ -26,7 +26,7 @@ public abstract class ExcelWriterParam {
      * 流大小
      */
     @Builder.Default
-    private Integer rowAccessWindowSize = ExcelConstant.INT_10000;
+    private Integer rowAccessWindowSize = ExcelConstant.DEFAULT_ROW_ACCESS_WINDOW_SIZE;
     /**
      * SXSSF 临时文件是否压缩。
      */

@@ -8,6 +8,7 @@ import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
+import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
 import java.io.BufferedReader;
@@ -27,6 +28,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 
 public final class DynamicExcelUtil {
 
@@ -47,7 +50,19 @@ public final class DynamicExcelUtil {
 		if (fileName != null && fileName.toLowerCase().endsWith(ExcelSuffixEnum.CSV.getSuffix())) {
 			return readCsv(inputStream);
 		}
-		return readWorkbook(inputStream);
+		return readWorkbook(inputStream, 0, null, 0, null, null, null, false, true, true);
+	}
+
+	public static List<Map<String, Object>> readMapList(InputStream inputStream, String fileName, int sheetIndex,
+														String sheetName, Integer headRowNumber, Integer dataStartRow,
+														Integer dataEndRow, Integer maxRows, boolean trimString,
+														boolean ignoreEmptyRow, boolean fillMergedCells) {
+		if (fileName != null && fileName.toLowerCase().endsWith(ExcelSuffixEnum.CSV.getSuffix())) {
+			List<Map<String, Object>> rows = readCsv(inputStream);
+			return sliceRows(rows, dataStartRow, dataEndRow, maxRows);
+		}
+		return readWorkbook(inputStream, sheetIndex, sheetName, headRowNumber, dataStartRow, dataEndRow, maxRows,
+				trimString, ignoreEmptyRow, fillMergedCells);
 	}
 
 	private static void writeWorkbook(OutputStream outputStream, ExcelSuffixEnum suffix, String sheetName,
@@ -92,35 +107,108 @@ public final class DynamicExcelUtil {
 		}
 	}
 
-	private static List<Map<String, Object>> readWorkbook(InputStream inputStream) {
+	private static List<Map<String, Object>> readWorkbook(InputStream inputStream, int sheetIndex, String sheetName,
+														  Integer headRowNumber, Integer dataStartRow,
+														  Integer dataEndRow, Integer maxRows,
+														  boolean trimString, boolean ignoreEmptyRow,
+														  boolean fillMergedCells) {
 		try (Workbook workbook = WorkbookFactory.create(inputStream)) {
-			Sheet sheet = workbook.getSheetAt(0);
+			Sheet sheet = sheetName == null || sheetName.trim().isEmpty() ? workbook.getSheetAt(sheetIndex) : workbook.getSheet(sheetName);
 			if (sheet == null || sheet.getPhysicalNumberOfRows() == 0) {
 				return new ArrayList<>();
 			}
 			DataFormatter formatter = new DataFormatter();
-			Row headerRow = sheet.getRow(0);
+			Map<Long, Cell> mergedFirstCellIndex = fillMergedCells ? buildMergedFirstCellIndex(sheet) : null;
+			int headerRowIndex = headRowNumber == null ? sheet.getFirstRowNum() : headRowNumber;
+			int firstDataRow = dataStartRow == null ? headerRowIndex + 1 : dataStartRow;
+			int lastDataRow = dataEndRow == null ? sheet.getLastRowNum() : Math.min(dataEndRow, sheet.getLastRowNum());
+			Row headerRow = sheet.getRow(headerRowIndex);
 			List<String> headers = new ArrayList<>();
 			for (int i = 0; headerRow != null && i < headerRow.getLastCellNum(); i++) {
-				headers.add(formatter.formatCellValue(headerRow.getCell(i)));
+				String header = formatCell(sheet, headerRowIndex, i, formatter, mergedFirstCellIndex);
+				headers.add(trimString(header, trimString));
 			}
 			List<Map<String, Object>> rows = new ArrayList<>();
-			for (int i = 1; i <= sheet.getLastRowNum(); i++) {
+			for (int i = firstDataRow; i <= lastDataRow; i++) {
+				if (maxRows != null && rows.size() >= maxRows) {
+					break;
+				}
 				Row row = sheet.getRow(i);
 				if (row == null) {
 					continue;
 				}
 				Map<String, Object> rowData = new LinkedHashMap<>();
+				boolean emptyRow = true;
 				for (int j = 0; j < headers.size(); j++) {
-					Cell cell = row.getCell(j);
-					rowData.put(headers.get(j), formatter.formatCellValue(cell));
+					String value = trimString(formatCell(sheet, i, j, formatter, mergedFirstCellIndex), trimString);
+					if (value != null && !value.isEmpty()) {
+						emptyRow = false;
+					}
+					rowData.put(headers.get(j), value);
 				}
-				rows.add(rowData);
+				if (!emptyRow || !ignoreEmptyRow) {
+					rows.add(rowData);
+				}
 			}
 			return rows;
 		} catch (Exception e) {
 			throw new IllegalStateException("Read excel map list failed", e);
 		}
+	}
+
+	private static String formatCell(Sheet sheet, int rowIndex, int colIndex, DataFormatter formatter,
+									 Map<Long, Cell> mergedFirstCellIndex) {
+		Row row = sheet.getRow(rowIndex);
+		Cell cell = row == null ? null : row.getCell(colIndex);
+		String value = formatter.formatCellValue(cell);
+		if (mergedFirstCellIndex == null || (value != null && !value.isEmpty())) {
+			return value;
+		}
+		Cell mergedFirstCell = mergedFirstCellIndex.get(cellKey(rowIndex, colIndex));
+		return mergedFirstCell == null ? value : formatter.formatCellValue(mergedFirstCell);
+	}
+
+	private static Map<Long, Cell> buildMergedFirstCellIndex(Sheet sheet) {
+		Map<Long, Cell> index = new LinkedHashMap<>();
+		for (int i = 0; i < sheet.getNumMergedRegions(); i++) {
+			CellRangeAddress range = sheet.getMergedRegion(i);
+			Row firstRow = sheet.getRow(range.getFirstRow());
+			Cell firstCell = firstRow == null ? null : firstRow.getCell(range.getFirstColumn());
+			if (firstCell == null) {
+				continue;
+			}
+			for (int rowIndex = range.getFirstRow(); rowIndex <= range.getLastRow(); rowIndex++) {
+				for (int colIndex = range.getFirstColumn(); colIndex <= range.getLastColumn(); colIndex++) {
+					index.put(cellKey(rowIndex, colIndex), firstCell);
+				}
+			}
+		}
+		return index;
+	}
+
+	private static long cellKey(int rowIndex, int colIndex) {
+		return (((long) rowIndex) << 32) | (colIndex & 0xffffffffL);
+	}
+
+	private static String trimString(String value, boolean trimString) {
+		return trimString && value != null ? value.trim() : value;
+	}
+
+	private static List<Map<String, Object>> sliceRows(List<Map<String, Object>> rows, Integer dataStartRow,
+													   Integer dataEndRow, Integer maxRows) {
+		if (rows == null || rows.isEmpty()) {
+			return rows;
+		}
+		int start = dataStartRow == null ? 0 : Math.max(0, dataStartRow - 1);
+		int end = dataEndRow == null ? rows.size() : Math.min(rows.size(), dataEndRow);
+		if (start >= end) {
+			return new ArrayList<>();
+		}
+		List<Map<String, Object>> sliced = new ArrayList<>(rows.subList(start, end));
+		if (maxRows != null && sliced.size() > maxRows) {
+			return new ArrayList<>(sliced.subList(0, maxRows));
+		}
+		return sliced;
 	}
 
 	private static void writeCsv(OutputStream outputStream, List<? extends Map<String, ?>> rows,
@@ -144,23 +232,26 @@ public final class DynamicExcelUtil {
 	}
 
 	private static List<Map<String, Object>> readCsv(InputStream inputStream) {
+		List<Map<String, Object>> rows = new ArrayList<>();
+		readCsv(inputStream, rows::add);
+		return rows;
+	}
+
+	public static void readCsv(InputStream inputStream, Consumer<Map<String, Object>> rowConsumer) {
 		try (Reader reader = new InputStreamReader(inputStream, StandardCharsets.UTF_8);
 			 BufferedReader bufferedReader = new BufferedReader(reader)) {
-			List<List<String>> records = parseCsv(bufferedReader);
-			if (records.isEmpty()) {
-				return new ArrayList<>();
-			}
-			List<String> headers = records.get(0);
-			List<Map<String, Object>> rows = new ArrayList<>();
-			for (int i = 1; i < records.size(); i++) {
-				List<String> record = records.get(i);
-				Map<String, Object> row = new LinkedHashMap<>();
-				for (int j = 0; j < headers.size(); j++) {
-					row.put(headers.get(j), j < record.size() ? record.get(j) : "");
+			AtomicReference<List<String>> headers = new AtomicReference<>();
+			forEachCsvRecord(bufferedReader, record -> {
+				if (headers.get() == null) {
+					headers.set(record);
+					return;
 				}
-				rows.add(row);
-			}
-			return rows;
+				Map<String, Object> row = new LinkedHashMap<>();
+				for (int j = 0; j < headers.get().size(); j++) {
+					row.put(headers.get().get(j), j < record.size() ? record.get(j) : "");
+				}
+				rowConsumer.accept(row);
+			});
 		} catch (IOException e) {
 			throw new UncheckedIOException(e);
 		}
@@ -210,8 +301,7 @@ public final class DynamicExcelUtil {
 		return "\"" + value.replace("\"", "\"\"") + "\"";
 	}
 
-	private static List<List<String>> parseCsv(BufferedReader reader) throws IOException {
-		List<List<String>> records = new ArrayList<>();
+	private static void forEachCsvRecord(BufferedReader reader, Consumer<List<String>> recordConsumer) throws IOException {
 		List<String> record = new ArrayList<>();
 		StringBuilder field = new StringBuilder();
 		boolean inQuotes = false;
@@ -241,7 +331,7 @@ public final class DynamicExcelUtil {
 			} else if (ch == '\n') {
 				record.add(trimCarriageReturn(field));
 				field.setLength(0);
-				records.add(record);
+				recordConsumer.accept(record);
 				record = new ArrayList<>();
 			} else {
 				field.append(ch);
@@ -249,9 +339,8 @@ public final class DynamicExcelUtil {
 		}
 		if (field.length() > 0 || !record.isEmpty()) {
 			record.add(trimCarriageReturn(field));
-			records.add(record);
+			recordConsumer.accept(record);
 		}
-		return records;
 	}
 
 	private static String trimCarriageReturn(StringBuilder field) {
