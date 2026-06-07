@@ -1,0 +1,2 @@
+2022-08-19 17:26:50,233 WARN [main] o.a.p.POIDocument [POIDocument.java:169] DocumentSummaryInformation property set came back as null
+2022-08-19 17:26:50,236 WARN [main] o.a.p.POIDocument [POIDocument.java:169] SummaryInformation property set came back as null
