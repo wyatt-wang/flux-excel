@@ -444,6 +444,12 @@ Common methods:
 | `readOnly(boolean)` | File read mode |
 | `failFast(boolean)` | Whether validation should fail fast |
 | `sheet(int)` | Select a sheet by zero-based index |
+| `sheet(String)` | Select a sheet by name |
+| `headRowNumber(int)` | Header start row or title column, zero-based |
+| `headRowCount(int)` | Number of header rows for dynamic multi-header map reading |
+| `dataStartRow(int)` | Data start row, or value start column for horizontal reading |
+| `dataEndRow(int)` | Data end row, or value end column for horizontal reading |
+| `maxRows(int)` | Maximum rows/models to read |
 
 ### Read a single object
 
@@ -571,6 +577,70 @@ List<UserExcelDTO> users = Excel.read(inputStream)
         .list(UserExcelDTO.class)
         .parse()
         .getList(UserExcelDTO.class);
+```
+
+### Complex Headers
+
+Multi-level headers can use the fast-excel/EasyExcel-style `head` or `value` annotation attribute. `titleName` remains supported and is used as the leaf title when `head` is not set.
+
+```java
+@ExcelWrite
+@ExcelRead
+public class UserExcelDTO extends ExcelBaseModel {
+    @ExcelWriteProperty(titleName = "姓名", head = {"基础信息", "姓名"})
+    @ExcelReadProperty(titleName = "姓名", head = {"基础信息", "姓名"})
+    private String name;
+
+    @ExcelWriteProperty(titleName = "年龄", head = {"基础信息", "年龄"})
+    @ExcelReadProperty(titleName = "年龄", head = {"基础信息", "年龄"})
+    private Integer age;
+}
+```
+
+For dynamic data, combine multiple header rows with `headRowCount(...)`:
+
+```java
+List<Map<String, Object>> rows = Excel.read(inputStream)
+        .fileName("users.xlsx")
+        .headRowNumber(0)
+        .headRowCount(2)
+        .mapList();
+```
+
+### Horizontal And Vertical Reading
+
+Horizontal reading treats the first column as field titles and each following column as one model. Vertical repeated-list reading treats a title/value block as one model and starts a new model when a field title repeats.
+
+```java
+List<UserExcelDTO> horizontalUsers = Excel.read(inputStream)
+        .fileName("users.xlsx")
+        .horizontalList(UserExcelDTO.class);
+
+List<UserExcelDTO> verticalUsers = Excel.read(inputStream)
+        .fileName("users.xlsx")
+        .verticalList(UserExcelDTO.class);
+```
+
+For a form plus list workbook, register both tasks on the same builder:
+
+```java
+ExcelReadBuilder builder = Excel.read(inputStream)
+        .fileName("report.xlsx")
+        .model(ReportTitleDTO.class)
+        .list(UserExcelDTO.class)
+        .parse();
+```
+
+### Rich Text Export
+
+Cells can receive Apache POI `RichTextString` directly, or the convenience wrapper `ExcelRichTextValue`.
+
+```java
+@ExcelWrite
+public class RichTextDTO extends ExcelBaseModel {
+    @ExcelWriteProperty(titleName = "说明")
+    private ExcelRichTextValue description;
+}
 ```
 
 ## Large Data Export
@@ -732,6 +802,7 @@ Marks an export field. Common attributes:
 | Attribute | Description |
 | --- | --- |
 | `titleName` | Header name |
+| `head` / `value` | Multi-level header path, compatible with fast-excel/EasyExcel style |
 | `rowHeight` / `colWidth` | Row height and column width |
 | `rowIndex` / `colIndex` | Fixed row and column for the field |
 | `formatPattern` | Output format |
@@ -757,6 +828,7 @@ Marks an import field. Common attributes:
 | Attribute | Description |
 | --- | --- |
 | `titleName` | Matching header name |
+| `head` / `value` | Multi-level header path, compatible with fast-excel/EasyExcel style |
 | `separator` | Separator |
 | `formatPattern` | Read format |
 | `formatter` | Custom read formatter |

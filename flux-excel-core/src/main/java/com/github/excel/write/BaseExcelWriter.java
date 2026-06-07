@@ -762,6 +762,9 @@ public class BaseExcelWriter {
 	 */
 	protected ColPointDto fillListTitle(ExcelCacheModel cacheModel, Sheet sheet, CreationHelper createHelper, int rowIndex, int colIndex, ExcelWriterFillStyleEnum fillStyleEnum, final int initColIndex, final int initRowIndex, ExcelWriterModel exportModel, final List<ExcelCacheFieldModel> fillFieldModelList) {
 		if (cacheModel.getExcelWrite().fillTitle()) {
+			if (ExcelWriterFillStyleEnum.VERTICAL == fillStyleEnum && cacheModel.getMaxHeadDepth() > ExcelConstant.ONE_INT) {
+				return fillComplexVerticalListTitle(cacheModel, sheet, createHelper, rowIndex, colIndex, initColIndex, initRowIndex, fillFieldModelList);
+			}
 			for (ExcelCacheFieldModel fieldModel : fillFieldModelList) {
 				if (fieldModel.isMap()) {
 					ColPointDto colPointDto = fillListMapTitle(cacheModel, sheet, createHelper, rowIndex, colIndex, fillStyleEnum, fieldModel, exportModel);
@@ -793,6 +796,92 @@ public class BaseExcelWriter {
 			rowIndex = initRowIndex;
 		}
 		return ColPointDto.builder().colIndex(colIndex).rowIndex(rowIndex).build();
+	}
+
+	protected ColPointDto fillComplexVerticalListTitle(ExcelCacheModel cacheModel, Sheet sheet, CreationHelper createHelper,
+													   int rowIndex, int colIndex, final int initColIndex, final int initRowIndex,
+													   final List<ExcelCacheFieldModel> fillFieldModelList) {
+		int maxDepth = cacheModel.getMaxHeadDepth();
+		String[][] headMatrix = new String[maxDepth][fillFieldModelList.size()];
+		for (int fieldIndex = 0; fieldIndex < fillFieldModelList.size(); fieldIndex++) {
+			ExcelCacheFieldModel fieldModel = fillFieldModelList.get(fieldIndex);
+			List<String> headNames = fieldModel.getHeadNames();
+			if (headNames == null || headNames.isEmpty()) {
+				headNames = Collections.singletonList(resolveRuntimeTitle(fieldModel));
+			}
+			for (int level = 0; level < maxDepth; level++) {
+				headMatrix[level][fieldIndex] = level < headNames.size() ? headNames.get(level) : ExcelConstant.NULL_STR;
+				Row row = ExcelHelper.getRowOrCreate(sheet, rowIndex + level);
+				ExcelHelper.setRowHeight(row, fieldModel.getTitleRowHeight());
+				Cell cell = ExcelHelper.getCellOrCreate(row, colIndex + fieldIndex);
+				ExcelHelper.setColWidth(sheet, colIndex + fieldIndex, fieldModel.getColWidth());
+				setCellValueAndStyle(cell, headMatrix[level][fieldIndex], fieldModel.getTitleStyleName(), null, createHelper);
+			}
+		}
+		mergeComplexHeaderCells(sheet, rowIndex, colIndex, headMatrix, fillFieldModelList);
+		if (cacheModel.getExcelWrite().freezeTitle()) {
+			sheet.createFreezePane(ExcelConstant.ZERO_SHORT, initRowIndex + maxDepth, ExcelConstant.ZERO_SHORT, initRowIndex + maxDepth);
+		}
+		if (cacheModel.getExcelWrite().filterTitle()) {
+			CellRangeAddress filterRange = new CellRangeAddress(initRowIndex, initRowIndex + maxDepth,
+					initColIndex, initColIndex + fillFieldModelList.size() - ExcelConstant.ONE_INT);
+			sheet.setAutoFilter(filterRange);
+		}
+		return ColPointDto.builder().colIndex(initColIndex).rowIndex(rowIndex + maxDepth).build();
+	}
+
+	private void mergeComplexHeaderCells(Sheet sheet, int startRowIndex, int startColIndex,
+										 String[][] headMatrix, List<ExcelCacheFieldModel> fillFieldModelList) {
+		int maxDepth = headMatrix.length;
+		int fieldCount = fillFieldModelList.size();
+		for (int level = 0; level < maxDepth; level++) {
+			int col = 0;
+			while (col < fieldCount) {
+				String title = headMatrix[level][col];
+				if (StringUtil.isEmpty(title)) {
+					col++;
+					continue;
+				}
+				int endCol = col;
+				while (endCol + ExcelConstant.ONE_INT < fieldCount
+						&& Objects.equals(title, headMatrix[level][endCol + ExcelConstant.ONE_INT])
+						&& Objects.equals(parentHeadKey(headMatrix, level, col), parentHeadKey(headMatrix, level, endCol + ExcelConstant.ONE_INT))) {
+					endCol++;
+				}
+				if (endCol > col) {
+					addMergedRegionIfNeeded(sheet, startRowIndex + level, startRowIndex + level,
+							startColIndex + col, startColIndex + endCol);
+				}
+				col = endCol + ExcelConstant.ONE_INT;
+			}
+		}
+		for (int fieldIndex = 0; fieldIndex < fieldCount; fieldIndex++) {
+			List<String> headNames = fillFieldModelList.get(fieldIndex).getHeadNames();
+			int headDepth = headNames == null || headNames.isEmpty() ? ExcelConstant.ONE_INT : headNames.size();
+			if (headDepth < maxDepth && StringUtil.notEmpty(headMatrix[headDepth - ExcelConstant.ONE_INT][fieldIndex])) {
+				addMergedRegionIfNeeded(sheet, startRowIndex + headDepth - ExcelConstant.ONE_INT,
+						startRowIndex + maxDepth - ExcelConstant.ONE_INT,
+						startColIndex + fieldIndex, startColIndex + fieldIndex);
+			}
+		}
+	}
+
+	private String parentHeadKey(String[][] headMatrix, int level, int fieldIndex) {
+		if (level <= ExcelConstant.ZERO_SHORT) {
+			return ExcelConstant.NULL_STR;
+		}
+		List<String> parents = new ArrayList<>();
+		for (int i = 0; i < level; i++) {
+			parents.add(headMatrix[i][fieldIndex]);
+		}
+		return String.join("\u001F", parents);
+	}
+
+	private void addMergedRegionIfNeeded(Sheet sheet, int firstRow, int lastRow, int firstCol, int lastCol) {
+		if (firstRow == lastRow && firstCol == lastCol) {
+			return;
+		}
+		sheet.addMergedRegion(new CellRangeAddress(firstRow, lastRow, firstCol, lastCol));
 	}
 
 	/**
@@ -1347,6 +1436,7 @@ public class BaseExcelWriter {
 	protected void setCellValueAndStyle(Cell cell, Object value, String styleName, String linkName, CreationHelper createHelper, String expression) {
 		value = setStyle(cell, value, styleName, linkName);
 		value = Objects.isNull(value) ? ExcelConstant.NULL_STR : value;
+		value = createRichTextValue(value, createHelper);
 		value = ExcelHelper.createHyperlink(cell, value, linkName, createHelper);
 		replaceExpression(cell, value, expression);
 	}
@@ -1362,8 +1452,19 @@ public class BaseExcelWriter {
 	protected void setCellValueAndStyle(Cell cell, Object value, String styleName, String linkName, CreationHelper createHelper) {
 		value = setStyle(cell, value, styleName, linkName);
 		value = Objects.isNull(value) ? ExcelConstant.NULL_STR : value;
+		value = createRichTextValue(value, createHelper);
 		value = ExcelHelper.createHyperlink(cell, value, linkName, createHelper);
 		ExcelHelper.setCellValue(cell, value);
+	}
+
+	private Object createRichTextValue(Object value, CreationHelper createHelper) {
+		if (!(value instanceof ExcelRichTextValue)) {
+			return value;
+		}
+		ExcelRichTextValue richTextValue = (ExcelRichTextValue) value;
+		List<ExcelRichTextModel> models = richTextValue.getRichTextModels();
+		ExcelRichTextModel[] modelArray = models == null ? new ExcelRichTextModel[ExcelConstant.ZERO_SHORT] : models.toArray(new ExcelRichTextModel[ExcelConstant.ZERO_SHORT]);
+		return ExcelHelper.createRichText(createHelper, Optional.ofNullable(richTextValue.getText()).orElse(ExcelConstant.NULL_STR), modelArray);
 	}
 
 	/**
@@ -1376,10 +1477,10 @@ public class BaseExcelWriter {
 	protected void replaceExpression(Cell cell, Object value, String expression) {
 		value = Objects.isNull(value) ? ExcelConstant.NULL_STR : value;
 		String expressionValue = cell.getStringCellValue();
-		if (expressionValue.matches(expression)) {
+		if (expressionValue.equals(expression)) {
 			ExcelHelper.setCellValue(cell, value);
 		} else {
-			String cellValue = expressionValue.replaceAll(expression, value.toString());
+			String cellValue = expressionValue.replace(expression, value.toString());
 			cell.setCellValue(cellValue);
 		}
 	}

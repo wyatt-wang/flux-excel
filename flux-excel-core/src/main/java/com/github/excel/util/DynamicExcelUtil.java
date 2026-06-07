@@ -50,18 +50,27 @@ public final class DynamicExcelUtil {
 		if (fileName != null && fileName.toLowerCase().endsWith(ExcelSuffixEnum.CSV.getSuffix())) {
 			return readCsv(inputStream);
 		}
-		return readWorkbook(inputStream, 0, null, 0, null, null, null, false, true, true);
+		return readWorkbook(inputStream, 0, null, 0, 1, null, null, null, false, true, true);
 	}
 
 	public static List<Map<String, Object>> readMapList(InputStream inputStream, String fileName, int sheetIndex,
 														String sheetName, Integer headRowNumber, Integer dataStartRow,
 														Integer dataEndRow, Integer maxRows, boolean trimString,
 														boolean ignoreEmptyRow, boolean fillMergedCells) {
+		return readMapList(inputStream, fileName, sheetIndex, sheetName, headRowNumber, 1, dataStartRow,
+				dataEndRow, maxRows, trimString, ignoreEmptyRow, fillMergedCells);
+	}
+
+	public static List<Map<String, Object>> readMapList(InputStream inputStream, String fileName, int sheetIndex,
+														String sheetName, Integer headRowNumber, Integer headRowCount,
+														Integer dataStartRow, Integer dataEndRow, Integer maxRows,
+														boolean trimString, boolean ignoreEmptyRow,
+														boolean fillMergedCells) {
 		if (fileName != null && fileName.toLowerCase().endsWith(ExcelSuffixEnum.CSV.getSuffix())) {
 			List<Map<String, Object>> rows = readCsv(inputStream);
 			return sliceRows(rows, dataStartRow, dataEndRow, maxRows);
 		}
-		return readWorkbook(inputStream, sheetIndex, sheetName, headRowNumber, dataStartRow, dataEndRow, maxRows,
+		return readWorkbook(inputStream, sheetIndex, sheetName, headRowNumber, headRowCount, dataStartRow, dataEndRow, maxRows,
 				trimString, ignoreEmptyRow, fillMergedCells);
 	}
 
@@ -108,7 +117,7 @@ public final class DynamicExcelUtil {
 	}
 
 	private static List<Map<String, Object>> readWorkbook(InputStream inputStream, int sheetIndex, String sheetName,
-														  Integer headRowNumber, Integer dataStartRow,
+														  Integer headRowNumber, Integer headRowCount, Integer dataStartRow,
 														  Integer dataEndRow, Integer maxRows,
 														  boolean trimString, boolean ignoreEmptyRow,
 														  boolean fillMergedCells) {
@@ -120,13 +129,13 @@ public final class DynamicExcelUtil {
 			DataFormatter formatter = new DataFormatter();
 			Map<Long, Cell> mergedFirstCellIndex = fillMergedCells ? buildMergedFirstCellIndex(sheet) : null;
 			int headerRowIndex = headRowNumber == null ? sheet.getFirstRowNum() : headRowNumber;
-			int firstDataRow = dataStartRow == null ? headerRowIndex + 1 : dataStartRow;
+			int headerRows = headRowCount == null || headRowCount < 1 ? 1 : headRowCount;
+			int firstDataRow = dataStartRow == null ? headerRowIndex + headerRows : dataStartRow;
 			int lastDataRow = dataEndRow == null ? sheet.getLastRowNum() : Math.min(dataEndRow, sheet.getLastRowNum());
-			Row headerRow = sheet.getRow(headerRowIndex);
+			Row headerRow = sheet.getRow(headerRowIndex + headerRows - 1);
 			List<String> headers = new ArrayList<>();
 			for (int i = 0; headerRow != null && i < headerRow.getLastCellNum(); i++) {
-				String header = formatCell(sheet, headerRowIndex, i, formatter, mergedFirstCellIndex);
-				headers.add(trimString(header, trimString));
+				headers.add(resolveHeader(sheet, headerRowIndex, headerRows, i, formatter, mergedFirstCellIndex, trimString));
 			}
 			List<Map<String, Object>> rows = new ArrayList<>();
 			for (int i = firstDataRow; i <= lastDataRow; i++) {
@@ -154,6 +163,22 @@ public final class DynamicExcelUtil {
 		} catch (Exception e) {
 			throw new IllegalStateException("Read excel map list failed", e);
 		}
+	}
+
+	private static String resolveHeader(Sheet sheet, int headerRowIndex, int headerRows, int colIndex,
+										DataFormatter formatter, Map<Long, Cell> mergedFirstCellIndex,
+										boolean trimString) {
+		List<String> names = new ArrayList<>();
+		for (int rowIndex = headerRowIndex; rowIndex < headerRowIndex + headerRows; rowIndex++) {
+			String header = trimString(formatCell(sheet, rowIndex, colIndex, formatter, mergedFirstCellIndex), trimString);
+			if (header == null || header.isEmpty()) {
+				continue;
+			}
+			if (names.isEmpty() || !header.equals(names.get(names.size() - 1))) {
+				names.add(header);
+			}
+		}
+		return String.join(".", names);
 	}
 
 	private static String formatCell(Sheet sheet, int rowIndex, int colIndex, DataFormatter formatter,

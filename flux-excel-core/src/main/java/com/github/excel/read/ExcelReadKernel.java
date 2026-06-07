@@ -78,7 +78,7 @@ public class ExcelReadKernel<T extends ExcelBaseModel> {
 
 	public void parseSheets(ExcelReadContext<T> context) {
 		for (Map.Entry<Integer, List<ExcelReaderModelContext<T>>> readModelEntry : context.getSheetModelMap().entrySet()) {
-			Sheet sheet = context.getWorkbook().getSheetAt(readModelEntry.getKey());
+			Sheet sheet = resolveSheet(context.getWorkbook(), readModelEntry.getKey(), readModelEntry.getValue());
 			if (Objects.isNull(sheet)) {
 				continue;
 			}
@@ -153,7 +153,14 @@ public class ExcelReadKernel<T extends ExcelBaseModel> {
 	private void parseRows(ExcelReadContext<T> context, List<ExcelReaderModelContext<T>> readModelList,
 						   Sheet sheet, Map<String, List<ExcelReaderPictureModel>> sheetPictureMap,
 						   Map<String, Object> mergedCellValueMap) {
-		for (int rowIndex = sheet.getFirstRowNum(); rowIndex <= sheet.getLastRowNum(); rowIndex++) {
+		int startRow = resolveStartRow(sheet, readModelList);
+		int endRow = resolveEndRow(sheet, readModelList);
+		Integer maxRows = resolveMaxRows(readModelList);
+		int readRows = 0;
+		for (int rowIndex = startRow; rowIndex <= endRow; rowIndex++) {
+			if (maxRows != null && readRows >= maxRows) {
+				break;
+			}
 			Row row = sheet.getRow(rowIndex);
 			if (Objects.isNull(row) || rowBlank(row)) {
 				continue;
@@ -163,7 +170,41 @@ public class ExcelReadKernel<T extends ExcelBaseModel> {
 			context.getReaderContext().getParserContext().setReadModelList(readModelList);
 			context.getReaderContext().getParserContext().setRow(row);
 			rowParser.rowParser(context.getReaderContext());
+			readRows++;
 		}
+	}
+
+	private Sheet resolveSheet(Workbook workbook, Integer sheetIndex, List<ExcelReaderModelContext<T>> readModelList) {
+		for (ExcelReaderModelContext<T> readModel : readModelList) {
+			if (StringUtil.notEmpty(readModel.getParam().getSheetName())) {
+				return workbook.getSheet(readModel.getParam().getSheetName());
+			}
+		}
+		return workbook.getSheetAt(sheetIndex);
+	}
+
+	private int resolveStartRow(Sheet sheet, List<ExcelReaderModelContext<T>> readModelList) {
+		return readModelList.stream()
+				.map(model -> model.getParam().getHeadRowNumber())
+				.filter(Objects::nonNull)
+				.min(Integer::compareTo)
+				.orElse(sheet.getFirstRowNum());
+	}
+
+	private int resolveEndRow(Sheet sheet, List<ExcelReaderModelContext<T>> readModelList) {
+		return readModelList.stream()
+				.map(model -> model.getParam().getDataEndRow())
+				.filter(Objects::nonNull)
+				.max(Integer::compareTo)
+				.orElse(sheet.getLastRowNum());
+	}
+
+	private Integer resolveMaxRows(List<ExcelReaderModelContext<T>> readModelList) {
+		return readModelList.stream()
+				.map(model -> model.getParam().getMaxRows())
+				.filter(Objects::nonNull)
+				.max(Integer::compareTo)
+				.orElse(null);
 	}
 
 	private boolean rowBlank(Row row) {

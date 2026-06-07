@@ -9,6 +9,7 @@ import lombok.experimental.Accessors;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.util.List;
 
 /**
  * @author Vico
@@ -79,4 +80,8 @@ public class ExcelCacheFieldModel {
      * 标题名称，目前用于在生成序列号时使用
      */
     private String titleName ;
+    /**
+     * 多级表头路径，从上到下排列。
+     */
+    private List<String> headNames;
 }

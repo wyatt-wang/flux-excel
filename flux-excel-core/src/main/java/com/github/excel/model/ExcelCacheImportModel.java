@@ -6,6 +6,7 @@ import com.github.excel.annotation.ExcelReadProperty;
 import lombok.Data;
 
 import java.lang.reflect.Method;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -18,11 +19,13 @@ public class ExcelCacheImportModel {
 	private ExcelRead excelRead;
 	private ExcelValidation validation;
 	private Map<String, ExcelCacheImportFieldModel> fieldModelMap;
+	private int maxHeadDepth = 1;
 
 	@Data
 	public static class ExcelCacheImportFieldModel {
 		private String field;
 		private ExcelReadProperty importProperty;
 		private Method setMethod;
+		private List<String> headNames;
 	}
 }

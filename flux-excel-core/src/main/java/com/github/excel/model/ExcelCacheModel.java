@@ -25,5 +25,9 @@ public class ExcelCacheModel {
 	 * 字段map
 	 */
 	private Map<String, ExcelCacheFieldModel> fieldModelMap;
+	/**
+	 * 最大表头层级数。
+	 */
+	private int maxHeadDepth = 1;
 
 }

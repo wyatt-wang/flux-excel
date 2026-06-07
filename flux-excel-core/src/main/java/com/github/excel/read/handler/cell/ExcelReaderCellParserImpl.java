@@ -27,9 +27,12 @@ import org.apache.poi.ss.util.CellReference;
 
 import java.lang.reflect.InvocationTargetException;
 import java.text.ParseException;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -325,6 +328,14 @@ public class ExcelReaderCellParserImpl<T extends ExcelBaseModel> extends Abstrac
         }
         Row titleRow = cell.getRow();
         int rowIndex = titleRow.getRowNum();
+        int maxHeadDepth = readModelList.stream()
+                .map(model -> model.getCacheImportModel().getMaxHeadDepth())
+                .filter(Objects::nonNull)
+                .max(Integer::compareTo)
+                .orElse(ExcelConstant.ONE_INT);
+        if (rowIndex < maxHeadDepth - ExcelConstant.ONE_INT) {
+            return;
+        }
         // 从第一列开始解析
         int colIndex = titleRow.getFirstCellNum(), lastColIndex = titleRow.getLastCellNum();
         for (; colIndex < lastColIndex; colIndex++) {
@@ -333,25 +344,102 @@ public class ExcelReaderCellParserImpl<T extends ExcelBaseModel> extends Abstrac
             if (Objects.isNull(titleCell)) {
                 continue;
             }
-            Object title = ExcelHelper.getCellValue(titleCell, String.class, null,readerFormatManager.getFormulaEvaluator());
-            if (StringUtil.isEmpty(title)) {
+            Set<String> titleCandidates = buildTitleCandidates(readerContext, titleCell, maxHeadDepth);
+            if (titleCandidates.isEmpty()) {
                 continue;
             }
             // 需要导入的field
-            List<ExcelReaderModelContext<T>> readModelDtoList = readModelList.stream().filter(e -> e.getCacheImportModel().getFieldModelMap().get(title) != null).collect(Collectors.toList());
+            List<ExcelReaderModelContext<T>> readModelDtoList = readModelList.stream()
+                    .filter(model -> findFieldModel(model, titleCandidates) != null)
+                    .collect(Collectors.toList());
             if (CollectionUtils.isEmpty(readModelDtoList)) {
                 continue;
             }
             // 需要解析的dto list
             for (ExcelReaderModelContext<T> readModelDto : readModelDtoList) {
-                ExcelCacheImportModel.ExcelCacheImportFieldModel fieldModel = readModelDto.getCacheImportModel().getFieldModelMap().get(title);
-                ReadModelTitleConfig<T> listTitleConfig = buildTitleConfigMap(readModelDto.getModelCla(), rowIndex, colIndex, fieldModel, title.toString(), rowIndex);
+                TitleMatch titleMatch = findTitleMatch(readModelDto, titleCandidates);
+                ExcelCacheImportModel.ExcelCacheImportFieldModel fieldModel = titleMatch.fieldModel;
+                ReadModelTitleConfig<T> listTitleConfig = buildTitleConfigMap(readModelDto.getModelCla(), rowIndex, colIndex, fieldModel, titleMatch.title, rowIndex);
                 readModelDto.setListTitleConfig(listTitleConfig);
             }
 
         }
         // 映射完成后，有值的情况下，执行判断
         ExcelValidationHelper.checkTitle(readModelList);
+    }
+
+    private Set<String> buildTitleCandidates(ExcelReaderContext<T> readerContext, Cell titleCell, int maxHeadDepth) {
+        Set<String> candidates = new LinkedHashSet<>();
+        ExcelReaderFormatManager readerFormatManager = readerContext.getParserContext().getReaderFormatManager();
+        Object title = ExcelHelper.getCellValue(titleCell, String.class, null, readerFormatManager.getFormulaEvaluator());
+        if (StringUtil.notEmpty(title)) {
+            candidates.add(title.toString());
+        }
+        List<String> headNames = new ArrayList<>();
+        int firstHeadRow = titleCell.getRowIndex() - maxHeadDepth + ExcelConstant.ONE_INT;
+        for (int rowIndex = firstHeadRow; rowIndex <= titleCell.getRowIndex(); rowIndex++) {
+            String value = readHeaderCellValue(readerContext, titleCell.getSheet().getRow(rowIndex), titleCell.getColumnIndex());
+            if (StringUtil.isEmpty(value)) {
+                continue;
+            }
+            if (headNames.isEmpty() || !value.equals(headNames.get(headNames.size() - ExcelConstant.ONE_INT))) {
+                headNames.add(value);
+            }
+        }
+        String canonical = canonicalHeadKey(headNames);
+        if (StringUtil.notEmpty(canonical)) {
+            candidates.add(canonical);
+        }
+        return candidates;
+    }
+
+    private String readHeaderCellValue(ExcelReaderContext<T> readerContext, Row row, int colIndex) {
+        if (row == null) {
+            return null;
+        }
+        Cell cell = row.getCell(colIndex, Row.MissingCellPolicy.CREATE_NULL_AS_BLANK);
+        Object value = ExcelHelper.getCellValue(cell, String.class, null,
+                readerContext.getParserContext().getReaderFormatManager().getFormulaEvaluator());
+        if (StringUtil.isEmpty(value) && readerContext.getParserContext().getMergedCellValueMap() != null) {
+            value = readerContext.getParserContext().getMergedCellValueMap()
+                    .get(row.getRowNum() + ":" + colIndex);
+        }
+        return value == null ? null : value.toString();
+    }
+
+    private ExcelCacheImportModel.ExcelCacheImportFieldModel findFieldModel(ExcelReaderModelContext<T> readModel,
+                                                                            Set<String> titleCandidates) {
+        TitleMatch titleMatch = findTitleMatch(readModel, titleCandidates);
+        return titleMatch == null ? null : titleMatch.fieldModel;
+    }
+
+    private TitleMatch findTitleMatch(ExcelReaderModelContext<T> readModel, Set<String> titleCandidates) {
+        for (String titleCandidate : titleCandidates) {
+            ExcelCacheImportModel.ExcelCacheImportFieldModel fieldModel = readModel.getCacheImportModel()
+                    .getFieldModelMap()
+                    .get(titleCandidate);
+            if (fieldModel != null) {
+                return new TitleMatch(titleCandidate, fieldModel);
+            }
+        }
+        return null;
+    }
+
+    private String canonicalHeadKey(List<String> headNames) {
+        if (headNames == null || headNames.isEmpty()) {
+            return ExcelConstant.NULL_STR;
+        }
+        return String.join("\u001F", headNames);
+    }
+
+    private static class TitleMatch {
+        private final String title;
+        private final ExcelCacheImportModel.ExcelCacheImportFieldModel fieldModel;
+
+        private TitleMatch(String title, ExcelCacheImportModel.ExcelCacheImportFieldModel fieldModel) {
+            this.title = title;
+            this.fieldModel = fieldModel;
+        }
     }
 
 

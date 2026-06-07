@@ -11,6 +11,7 @@ import com.github.excel.model.ExcelCellComment;
 import com.github.excel.model.ExcelCellHyperlink;
 import com.github.excel.model.ExcelHeaderInfo;
 import com.github.excel.model.ExcelMergedCell;
+import com.github.excel.param.ExcelRichTextValue;
 import org.apache.poi.common.usermodel.HyperlinkType;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.ClientAnchor;
@@ -204,6 +205,122 @@ public class ExcelDynamicFeatureTest {
     }
 
     @Test
+    public void exportsAndReadsComplexHeaders() throws Exception {
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+
+        Excel.write(outputStream)
+                .list(Arrays.asList(new ComplexHeaderDto("Alice", 18, "OK")), ComplexHeaderDto.class)
+                .export();
+
+        try (Workbook workbook = WorkbookFactory.create(new ByteArrayInputStream(outputStream.toByteArray()))) {
+            assertEquals("基础信息", workbook.getSheetAt(0).getRow(0).getCell(0).getStringCellValue());
+            assertEquals("姓名", workbook.getSheetAt(0).getRow(1).getCell(0).getStringCellValue());
+            assertEquals("年龄", workbook.getSheetAt(0).getRow(1).getCell(1).getStringCellValue());
+            assertEquals("备注", workbook.getSheetAt(0).getRow(0).getCell(2).getStringCellValue());
+            assertEquals("Alice", workbook.getSheetAt(0).getRow(2).getCell(0).getStringCellValue());
+            assertEquals("A1:B1", workbook.getSheetAt(0).getMergedRegion(0).formatAsString());
+        }
+
+        List<ComplexHeaderReadDto> rows = Excel.read(new ByteArrayInputStream(outputStream.toByteArray()))
+                .fileName("complex.xlsx")
+                .list(ComplexHeaderReadDto.class)
+                .parse()
+                .getList(ComplexHeaderReadDto.class);
+
+        assertEquals(1, rows.size());
+        assertEquals("Alice", rows.get(0).getName());
+        assertEquals(Integer.valueOf(18), rows.get(0).getAge());
+        assertEquals("OK", rows.get(0).getRemark());
+    }
+
+    @Test
+    public void readsDynamicMapWithComplexHeaders() {
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+
+        Excel.write(outputStream)
+                .list(Arrays.asList(new ComplexHeaderDto("Alice", 18, "OK")), ComplexHeaderDto.class)
+                .export();
+
+        List<Map<String, Object>> rows = Excel.read(new ByteArrayInputStream(outputStream.toByteArray()))
+                .fileName("complex.xlsx")
+                .headRowNumber(0)
+                .headRowCount(2)
+                .mapList();
+
+        assertEquals(1, rows.size());
+        assertEquals("Alice", rows.get(0).get("基础信息.姓名"));
+        assertEquals("18", rows.get(0).get("基础信息.年龄"));
+        assertEquals("OK", rows.get(0).get("备注"));
+    }
+
+    @Test
+    public void exportsRichTextValue() throws Exception {
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+
+        Excel.write(outputStream)
+                .list(Arrays.asList(new RichTextDto(ExcelRichTextValue.of("hello rich text"))), RichTextDto.class)
+                .export();
+
+        try (Workbook workbook = WorkbookFactory.create(new ByteArrayInputStream(outputStream.toByteArray()))) {
+            assertEquals("hello rich text", workbook.getSheetAt(0).getRow(1).getCell(0).getStringCellValue());
+        }
+    }
+
+    @Test
+    public void readsHorizontalModelList() throws Exception {
+        byte[] workbookBytes;
+        try (XSSFWorkbook workbook = new XSSFWorkbook();
+             ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+            XSSFSheet sheet = workbook.createSheet("horizontal");
+            sheet.createRow(0).createCell(0).setCellValue("姓名");
+            sheet.getRow(0).createCell(1).setCellValue("Alice");
+            sheet.getRow(0).createCell(2).setCellValue("Bob");
+            sheet.createRow(1).createCell(0).setCellValue("年龄");
+            sheet.getRow(1).createCell(1).setCellValue("18");
+            sheet.getRow(1).createCell(2).setCellValue("20");
+            workbook.write(outputStream);
+            workbookBytes = outputStream.toByteArray();
+        }
+
+        List<CsvDto> rows = Excel.read(new ByteArrayInputStream(workbookBytes))
+                .fileName("horizontal.xlsx")
+                .sheet("horizontal")
+                .horizontalList(CsvDto.class);
+
+        assertEquals(2, rows.size());
+        assertEquals("Alice", rows.get(0).getName());
+        assertEquals(Integer.valueOf(20), rows.get(1).getAge());
+    }
+
+    @Test
+    public void readsVerticalRepeatedList() throws Exception {
+        byte[] workbookBytes;
+        try (XSSFWorkbook workbook = new XSSFWorkbook();
+             ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+            XSSFSheet sheet = workbook.createSheet("vertical");
+            sheet.createRow(0).createCell(0).setCellValue("姓名");
+            sheet.getRow(0).createCell(1).setCellValue("Alice");
+            sheet.createRow(1).createCell(0).setCellValue("年龄");
+            sheet.getRow(1).createCell(1).setCellValue("18");
+            sheet.createRow(2).createCell(0).setCellValue("姓名");
+            sheet.getRow(2).createCell(1).setCellValue("Bob");
+            sheet.createRow(3).createCell(0).setCellValue("年龄");
+            sheet.getRow(3).createCell(1).setCellValue("20");
+            workbook.write(outputStream);
+            workbookBytes = outputStream.toByteArray();
+        }
+
+        List<CsvDto> rows = Excel.read(new ByteArrayInputStream(workbookBytes))
+                .fileName("vertical.xlsx")
+                .sheet("vertical")
+                .verticalList(CsvDto.class);
+
+        assertEquals(2, rows.size());
+        assertEquals("Alice", rows.get(0).getName());
+        assertEquals(Integer.valueOf(20), rows.get(1).getAge());
+    }
+
+    @Test
     public void readsWorkbookHeadersCommentsHyperlinksAndMergedCells() throws Exception {
         byte[] workbookBytes = createWorkbookWithMetadata();
 
@@ -366,6 +483,108 @@ public class ExcelDynamicFeatureTest {
 
         public void setAge(Integer age) {
             this.age = age;
+        }
+    }
+
+    @ExcelWrite
+    public static class ComplexHeaderDto extends ExcelBaseModel {
+        @ExcelWriteProperty(titleName = "姓名", head = {"基础信息", "姓名"})
+        private String name;
+
+        @ExcelWriteProperty(titleName = "年龄", head = {"基础信息", "年龄"})
+        private Integer age;
+
+        @ExcelWriteProperty(titleName = "备注")
+        private String remark;
+
+        public ComplexHeaderDto() {
+        }
+
+        public ComplexHeaderDto(String name, Integer age, String remark) {
+            this.name = name;
+            this.age = age;
+            this.remark = remark;
+        }
+
+        public String getName() {
+            return name;
+        }
+
+        public void setName(String name) {
+            this.name = name;
+        }
+
+        public Integer getAge() {
+            return age;
+        }
+
+        public void setAge(Integer age) {
+            this.age = age;
+        }
+
+        public String getRemark() {
+            return remark;
+        }
+
+        public void setRemark(String remark) {
+            this.remark = remark;
+        }
+    }
+
+    @ExcelRead
+    public static class ComplexHeaderReadDto extends ExcelBaseModel {
+        @ExcelReadProperty(titleName = "姓名", head = {"基础信息", "姓名"})
+        private String name;
+
+        @ExcelReadProperty(titleName = "年龄", head = {"基础信息", "年龄"})
+        private Integer age;
+
+        @ExcelReadProperty(titleName = "备注")
+        private String remark;
+
+        public String getName() {
+            return name;
+        }
+
+        public void setName(String name) {
+            this.name = name;
+        }
+
+        public Integer getAge() {
+            return age;
+        }
+
+        public void setAge(Integer age) {
+            this.age = age;
+        }
+
+        public String getRemark() {
+            return remark;
+        }
+
+        public void setRemark(String remark) {
+            this.remark = remark;
+        }
+    }
+
+    @ExcelWrite
+    public static class RichTextDto extends ExcelBaseModel {
+        @ExcelWriteProperty(titleName = "富文本")
+        private ExcelRichTextValue text;
+
+        public RichTextDto() {
+        }
+
+        public RichTextDto(ExcelRichTextValue text) {
+            this.text = text;
+        }
+
+        public ExcelRichTextValue getText() {
+            return text;
+        }
+
+        public void setText(ExcelRichTextValue text) {
+            this.text = text;
         }
     }
 

@@ -90,9 +90,9 @@ public class ExcelConstant {
 
 	public static final String SEPARATOR = "=>";
 
-	public static final String EXPRESSION_PATTERN ="\\$\\{[A-Z,a-z,0-9]+((\\.{1})([A-Z,a-z,0-9]+))+\\}";
+	public static final String EXPRESSION_PATTERN ="\\$\\{[A-Za-z0-9_]+(\\.[A-Za-z0-9_]+)+\\}";
 
-	public static final String EXPRESSION_TEXT_PATTERN =".*\\$\\{[A-Z,a-z,0-9]+((\\.{1})([A-Z,a-z,0-9]+))+\\}.*";
+	public static final String EXPRESSION_TEXT_PATTERN =".*\\$\\{[A-Za-z0-9_]+(\\.[A-Za-z0-9_]+)+\\}.*";
 
 	public static final String NUMBER_PATTERN ="\\d+(.\\d+)?";
 

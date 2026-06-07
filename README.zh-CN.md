@@ -444,6 +444,12 @@ Excel.read(new File("users.xlsx"))
 | `readOnly(boolean)` | 文件读取模式 |
 | `failFast(boolean)` | 校验失败时是否快速失败 |
 | `sheet(int)` | 选择 sheet，下标从 `0` 开始 |
+| `sheet(String)` | 按名称选择 sheet |
+| `headRowNumber(int)` | 表头起始行，或横向读取时的标题列，下标从 `0` 开始 |
+| `headRowCount(int)` | 动态多表头 Map 读取的表头行数 |
+| `dataStartRow(int)` | 数据起始行，或横向读取时的值起始列 |
+| `dataEndRow(int)` | 数据结束行，或横向读取时的值结束列 |
+| `maxRows(int)` | 最大读取模型数量 |
 
 ### 读取单个对象
 
@@ -571,6 +577,70 @@ List<UserExcelDTO> users = Excel.read(inputStream)
         .list(UserExcelDTO.class)
         .parse()
         .getList(UserExcelDTO.class);
+```
+
+### 复杂表头
+
+多级表头支持 fast-excel/EasyExcel 风格的 `head` 或 `value` 注解属性。`titleName` 保持兼容；未设置 `head` 时使用 `titleName`。
+
+```java
+@ExcelWrite
+@ExcelRead
+public class UserExcelDTO extends ExcelBaseModel {
+    @ExcelWriteProperty(titleName = "姓名", head = {"基础信息", "姓名"})
+    @ExcelReadProperty(titleName = "姓名", head = {"基础信息", "姓名"})
+    private String name;
+
+    @ExcelWriteProperty(titleName = "年龄", head = {"基础信息", "年龄"})
+    @ExcelReadProperty(titleName = "年龄", head = {"基础信息", "年龄"})
+    private Integer age;
+}
+```
+
+动态表可以通过 `headRowCount(...)` 合并多行表头：
+
+```java
+List<Map<String, Object>> rows = Excel.read(inputStream)
+        .fileName("users.xlsx")
+        .headRowNumber(0)
+        .headRowCount(2)
+        .mapList();
+```
+
+### 横向和垂直读取
+
+横向读取会把第一列作为字段标题、后续每一列作为一个模型。垂直重复列表读取会把一组“标题/值”块作为一个模型，字段标题重复时开始下一个模型。
+
+```java
+List<UserExcelDTO> horizontalUsers = Excel.read(inputStream)
+        .fileName("users.xlsx")
+        .horizontalList(UserExcelDTO.class);
+
+List<UserExcelDTO> verticalUsers = Excel.read(inputStream)
+        .fileName("users.xlsx")
+        .verticalList(UserExcelDTO.class);
+```
+
+表单 + 列表复杂模式可以在同一个 builder 中同时注册：
+
+```java
+ExcelReadBuilder builder = Excel.read(inputStream)
+        .fileName("report.xlsx")
+        .model(ReportTitleDTO.class)
+        .list(UserExcelDTO.class)
+        .parse();
+```
+
+### 富文本导出
+
+单元格值可以直接传 Apache POI `RichTextString`，也可以使用便捷包装 `ExcelRichTextValue`。
+
+```java
+@ExcelWrite
+public class RichTextDTO extends ExcelBaseModel {
+    @ExcelWriteProperty(titleName = "说明")
+    private ExcelRichTextValue description;
+}
 ```
 
 ## Large Data Export
@@ -732,6 +802,7 @@ src/main/resources/
 | 属性 | 说明 |
 | --- | --- |
 | `titleName` | 表头名称 |
+| `head` / `value` | 多级表头路径，兼容 fast-excel/EasyExcel 风格 |
 | `rowHeight` / `colWidth` | 行高和列宽 |
 | `rowIndex` / `colIndex` | 字段固定行列 |
 | `formatPattern` | 输出格式 |
@@ -757,6 +828,7 @@ src/main/resources/
 | 属性 | 说明 |
 | --- | --- |
 | `titleName` | 对应表头名称 |
+| `head` / `value` | 多级表头路径，兼容 fast-excel/EasyExcel 风格 |
 | `separator` | 分隔符 |
 | `formatPattern` | 读取格式 |
 | `formatter` | 自定义读取格式化器 |

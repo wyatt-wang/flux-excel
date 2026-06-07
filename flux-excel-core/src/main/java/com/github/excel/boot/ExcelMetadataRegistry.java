@@ -322,9 +322,12 @@ public class ExcelMetadataRegistry {
                 fieldModel.setContentRowHeight(contentRowHeight);
                 fieldModel.setColWidth(colWidth);
                 fieldModel.setIndex(exportCell.index());
-                fieldModel.setTitleName(exportCell.titleName());
+                List<String> headNames = resolveWriteHeadNames(exportCell);
+                fieldModel.setHeadNames(headNames);
+                fieldModel.setTitleName(headNames.get(headNames.size() - 1));
                 fieldModelList.add(fieldModel);
                 fieldModelMap.put(exportCell.titleName(), fieldModel);
+                fieldModelMap.put(canonicalHeadKey(headNames), fieldModel);
             } catch (NoSuchMethodException e) {
                 log.error(Throwables.getStackTraceAsString(e));
                 throw new ExcelWriterException("load export model failed ,cause:" + e.getMessage());
@@ -340,6 +343,12 @@ public class ExcelMetadataRegistry {
         }
         cacheModel.setFieldModelList(fieldModelList);
         cacheModel.setFieldModelMap(fieldModelMap);
+        cacheModel.setMaxHeadDepth(fieldModelList.stream()
+                .map(ExcelCacheFieldModel::getHeadNames)
+                .filter(Objects::nonNull)
+                .map(List::size)
+                .max(Integer::compareTo)
+                .orElse(ExcelConstant.ONE_INT));
         return cacheModel;
     }
 
@@ -362,6 +371,7 @@ public class ExcelMetadataRegistry {
             fieldModel.setContentRowHeight(ExcelConstant.MINUS_TWO_SHORT);
             fieldModel.setIndex(ExcelConstant.INT_NEGATIVE_9999);
             fieldModel.setTitleName(excelWrite.incrementSequenceTitle());
+            fieldModel.setHeadNames(Collections.singletonList(excelWrite.incrementSequenceTitle()));
             fieldModelList.add(fieldModel);
             fieldModelMap.put(ExcelConstant.INCREMENT_SEQUENCE_NO_FIELD_NAME, fieldModel);
         }
@@ -437,15 +447,77 @@ public class ExcelMetadataRegistry {
                 fieldModel.setImportProperty(importProperty);
                 fieldModel.setSetMethod(setMethod);
                 fieldModel.setField(excelField.getName());
+                List<String> headNames = resolveReadHeadNames(importProperty);
+                fieldModel.setHeadNames(headNames);
                 String modelMapKey = excelRead.enableSeparator() ? importProperty.titleName() + importProperty.separator() : importProperty.titleName();
                 fieldModelMap.put(modelMapKey, fieldModel);
+                fieldModelMap.put(canonicalHeadKey(headNames), fieldModel);
+                if (excelRead.enableSeparator()) {
+                    fieldModelMap.put(canonicalHeadKey(Collections.singletonList(modelMapKey)), fieldModel);
+                }
             } catch (NoSuchMethodException e) {
                 log.error(Throwables.getStackTraceAsString(e));
                 throw new ExcelReaderException("load import model failed ,cause:" + e.getMessage());
             }
         }
         cacheModel.setFieldModelMap(fieldModelMap);
+        cacheModel.setMaxHeadDepth(fieldModelMap.values().stream()
+                .map(ExcelCacheImportModel.ExcelCacheImportFieldModel::getHeadNames)
+                .filter(Objects::nonNull)
+                .map(List::size)
+                .max(Integer::compareTo)
+                .orElse(ExcelConstant.ONE_INT));
         return cacheModel;
+    }
+
+    private static List<String> resolveWriteHeadNames(ExcelWriteProperty exportCell) {
+        if (exportCell.head().length > ExcelConstant.ZERO_SHORT) {
+            return normalizeHeadNames(Arrays.asList(exportCell.head()), exportCell.titleName());
+        }
+        if (exportCell.value().length > ExcelConstant.ZERO_SHORT) {
+            return normalizeHeadNames(Arrays.asList(exportCell.value()), exportCell.titleName());
+        }
+        return normalizeHeadNames(Collections.singletonList(exportCell.titleName()), exportCell.titleName());
+    }
+
+    private static List<String> resolveReadHeadNames(ExcelReadProperty importProperty) {
+        if (importProperty.head().length > ExcelConstant.ZERO_SHORT) {
+            return normalizeHeadNames(Arrays.asList(importProperty.head()), importProperty.titleName());
+        }
+        if (importProperty.value().length > ExcelConstant.ZERO_SHORT) {
+            return normalizeHeadNames(Arrays.asList(importProperty.value()), importProperty.titleName());
+        }
+        return normalizeHeadNames(Collections.singletonList(importProperty.titleName()), importProperty.titleName());
+    }
+
+    private static List<String> normalizeHeadNames(List<String> source, String fallbackTitle) {
+        List<String> headNames = source.stream()
+                .filter(StringUtil::notEmpty)
+                .map(String::trim)
+                .collect(Collectors.toList());
+        if (headNames.isEmpty()) {
+            headNames.add(fallbackTitle);
+        }
+        return headNames;
+    }
+
+    private static String canonicalHeadKey(List<String> headNames) {
+        if (headNames == null || headNames.isEmpty()) {
+            return ExcelConstant.NULL_STR;
+        }
+        List<String> normalized = new ArrayList<>();
+        String previous = null;
+        for (String headName : headNames) {
+            if (StringUtil.isEmpty(headName)) {
+                continue;
+            }
+            String current = headName.trim();
+            if (!current.equals(previous)) {
+                normalized.add(current);
+            }
+            previous = current;
+        }
+        return String.join("\u001F", normalized);
     }
 
 

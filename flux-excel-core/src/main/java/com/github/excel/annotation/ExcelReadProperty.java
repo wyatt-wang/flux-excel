@@ -21,6 +21,15 @@ public @interface ExcelReadProperty {
 	 */
 	String titleName() default ExcelConstant.NULL_STR;
 	/**
+	 * 多级表头，兼容 fast-excel/EasyExcel 的 head/value 风格。
+	 * 为空时使用 titleName。
+	 */
+	String[] head() default {};
+	/**
+	 * 多级表头别名，等价于 head。
+	 */
+	String[] value() default {};
+	/**
 	 * 分隔符
 	 * @return
 	 */

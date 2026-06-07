@@ -27,6 +27,7 @@ import com.github.excel.read.listener.ExcelReadListenerContext;
 import com.github.excel.read.pipeline.execution.ExcelReadExecutionContext;
 import com.github.excel.read.pipeline.execution.ExcelReadExecutionPipelines;
 import com.github.excel.util.DynamicExcelUtil;
+import com.github.excel.util.StringUtil;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.Comment;
 import org.apache.poi.ss.usermodel.DataFormatter;
@@ -67,6 +68,7 @@ public class ExcelReadBuilder {
 	private int sheetIndex = 0;
 	private String sheetName;
 	private Integer headRowNumber;
+	private Integer headRowCount;
 	private Integer dataStartRow;
 	private Integer dataEndRow;
 	private Integer maxRows;
@@ -142,6 +144,11 @@ public class ExcelReadBuilder {
 
 	public ExcelReadBuilder headRowNumber(int headRowNumber) {
 		this.headRowNumber = headRowNumber;
+		return this;
+	}
+
+	public ExcelReadBuilder headRowCount(int headRowCount) {
+		this.headRowCount = headRowCount;
 		return this;
 	}
 
@@ -316,10 +323,10 @@ public class ExcelReadBuilder {
 		}
 		if (readerParam instanceof ExcelReaderFileParam) {
 			try (InputStream inputStream = new FileInputStream(((ExcelReaderFileParam) readerParam).getFile())) {
-				cachedMapList = DynamicExcelUtil.readMapList(inputStream, readerParam.getTemplate(), sheetIndex, sheetName,
-						headRowNumber, dataStartRow, dataEndRow, maxRows,
-						Boolean.TRUE.equals(readerParam.getTrimString()),
-						Boolean.TRUE.equals(readerParam.getIgnoreEmptyRow()), true);
+					cachedMapList = DynamicExcelUtil.readMapList(inputStream, readerParam.getTemplate(), sheetIndex, sheetName,
+							headRowNumber, headRowCount, dataStartRow, dataEndRow, maxRows,
+							Boolean.TRUE.equals(readerParam.getTrimString()),
+							Boolean.TRUE.equals(readerParam.getIgnoreEmptyRow()), true);
 			} catch (FileNotFoundException e) {
 				throw new IllegalStateException("Read excel map list file failed", e);
 			} catch (IOException e) {
@@ -327,7 +334,7 @@ public class ExcelReadBuilder {
 			}
 		} else {
 			cachedMapList = DynamicExcelUtil.readMapList(((ExcelReaderStreamParam) readerParam).getStream(), readerParam.getTemplate(),
-					sheetIndex, sheetName, headRowNumber, dataStartRow, dataEndRow, maxRows,
+					sheetIndex, sheetName, headRowNumber, headRowCount, dataStartRow, dataEndRow, maxRows,
 					Boolean.TRUE.equals(readerParam.getTrimString()),
 					Boolean.TRUE.equals(readerParam.getIgnoreEmptyRow()), true);
 		}
@@ -480,6 +487,104 @@ public class ExcelReadBuilder {
 	public List<Map<String, Object>> preview(int rows) {
 		List<Map<String, Object>> mapRows = mapList();
 		return mapRows.size() <= rows ? mapRows : new ArrayList<>(mapRows.subList(0, rows));
+	}
+
+	public <T extends ExcelBaseModel> T horizontalModel(Class<T> modelClass) {
+		List<T> rows = horizontalList(modelClass);
+		return rows.isEmpty() ? null : rows.get(0);
+	}
+
+	public <T extends ExcelBaseModel> List<T> horizontalList(Class<T> modelClass) {
+		ExcelCacheImportModel cacheModel = ExcelMetadataRegistry.getExcelCacheImportMapValue(modelClass);
+		return inspectWorkbook(workbook -> {
+			Sheet sheet = resolveSheet(workbook);
+			if (sheet == null) {
+				return new ArrayList<>();
+			}
+			DataFormatter formatter = new DataFormatter();
+			int titleColIndex = headRowNumber == null ? 0 : headRowNumber;
+			int firstDataCol = dataStartRow == null ? titleColIndex + 1 : dataStartRow;
+			int lastDataCol = dataEndRow == null ? maxLastCellNum(sheet) - 1 : dataEndRow;
+			Map<Integer, ExcelCacheImportModel.ExcelCacheImportFieldModel> rowFieldMap = new LinkedHashMap<>();
+			for (Row row : sheet) {
+				Cell titleCell = row.getCell(titleColIndex);
+				String title = formatter.formatCellValue(titleCell);
+				ExcelCacheImportModel.ExcelCacheImportFieldModel fieldModel = cacheModel.getFieldModelMap().get(title);
+				if (fieldModel != null) {
+					rowFieldMap.put(row.getRowNum(), fieldModel);
+				}
+			}
+			List<T> result = new ArrayList<>();
+			for (int colIndex = firstDataCol; colIndex <= lastDataCol; colIndex++) {
+				T model = modelClass.getDeclaredConstructor().newInstance();
+				boolean hasValue = false;
+				for (Map.Entry<Integer, ExcelCacheImportModel.ExcelCacheImportFieldModel> entry : rowFieldMap.entrySet()) {
+					Row row = sheet.getRow(entry.getKey());
+					Cell valueCell = row == null ? null : row.getCell(colIndex);
+					String value = formatter.formatCellValue(valueCell);
+					if (StringUtil.notEmpty(value)) {
+						hasValue = true;
+					}
+					setReadField(model, entry.getValue(), value);
+				}
+				if (hasValue) {
+					result.add(model);
+				}
+				if (maxRows != null && result.size() >= maxRows) {
+					break;
+				}
+			}
+			return result;
+		});
+	}
+
+	public <T extends ExcelBaseModel> List<T> verticalList(Class<T> modelClass) {
+		ExcelCacheImportModel cacheModel = ExcelMetadataRegistry.getExcelCacheImportMapValue(modelClass);
+		return inspectWorkbook(workbook -> {
+			Sheet sheet = resolveSheet(workbook);
+			if (sheet == null) {
+				return new ArrayList<>();
+			}
+			DataFormatter formatter = new DataFormatter();
+			int titleColIndex = headRowNumber == null ? 0 : headRowNumber;
+			int valueColIndex = dataStartRow == null ? titleColIndex + 1 : dataStartRow;
+			int startRow = sheet.getFirstRowNum();
+			int endRow = dataEndRow == null ? sheet.getLastRowNum() : Math.min(dataEndRow, sheet.getLastRowNum());
+			List<T> result = new ArrayList<>();
+			T current = modelClass.getDeclaredConstructor().newInstance();
+			boolean hasValue = false;
+			Set<String> seenFields = new LinkedHashSet<>();
+			for (int rowIndex = startRow; rowIndex <= endRow; rowIndex++) {
+				Row row = sheet.getRow(rowIndex);
+				if (row == null) {
+					continue;
+				}
+				String title = formatter.formatCellValue(row.getCell(titleColIndex));
+				ExcelCacheImportModel.ExcelCacheImportFieldModel fieldModel = cacheModel.getFieldModelMap().get(title);
+				if (fieldModel == null) {
+					continue;
+				}
+				if (seenFields.contains(fieldModel.getField()) && hasValue) {
+					result.add(current);
+					if (maxRows != null && result.size() >= maxRows) {
+						return result;
+					}
+					current = modelClass.getDeclaredConstructor().newInstance();
+					seenFields.clear();
+					hasValue = false;
+				}
+				String value = formatter.formatCellValue(row.getCell(valueColIndex));
+				if (StringUtil.notEmpty(value)) {
+					hasValue = true;
+				}
+				setReadField(current, fieldModel, value);
+				seenFields.add(fieldModel.getField());
+			}
+			if (hasValue && (maxRows == null || result.size() < maxRows)) {
+				result.add(current);
+			}
+			return result;
+		});
 	}
 
 	public String getErrorMsg() {
@@ -688,6 +793,24 @@ public class ExcelReadBuilder {
 		} catch (InstantiationException | IllegalAccessException | InvocationTargetException | NoSuchMethodException | ParseException e) {
 			throw new IllegalStateException("Read csv model list failed", e);
 		}
+	}
+
+	private <T extends ExcelBaseModel> void setReadField(T model,
+														 ExcelCacheImportModel.ExcelCacheImportFieldModel fieldModel,
+														 Object rawValue) throws InvocationTargetException, IllegalAccessException, ParseException {
+		Class<?> targetType = fieldModel.getSetMethod().getParameterTypes()[0];
+		Object value = csvDataFormat.format(rawValue, fieldModel.getImportProperty().formatPattern(), wrapPrimitive(targetType));
+		fieldModel.getSetMethod().invoke(model, value);
+	}
+
+	private int maxLastCellNum(Sheet sheet) {
+		int max = 0;
+		for (Row row : sheet) {
+			if (row.getLastCellNum() > max) {
+				max = row.getLastCellNum();
+			}
+		}
+		return max;
 	}
 
 	private boolean csvRowInRange(int dataRowIndex, int acceptedRows) {
